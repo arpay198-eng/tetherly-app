@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+html { scroll-behavior: smooth; font-size: 16px; }
+body { color: #1a1a1a; background: #f3f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; margin: 0; padding: 0; }
+#app { width: 100%; max-width: 440px; min-height: 100vh; min-height: 100dvh; margin: 0 auto; background: #f3f5f7; position: relative; }
+@media (min-width: 480px) {
+  body { background: #e5e7eb; }
+  #app { box-shadow: 0 0 50px rgba(0, 0, 0, 0.1); border-left: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; }
+}
+
+/* PC Admin Portal Desktop Expansion */
+body:has(.admin-portal-root) {
+  background: #0b132b !important;
+}
+#app:has(.admin-portal-root),
+body:has(.admin-portal-root) #app {
+  max-width: 100% !important;
+  width: 100% !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  background: #f8fafc !important;
+}
+.safe-bottom { padding-bottom: calc(80px + var(--safe-bottom)); }
+.safe-top { padding-top: var(--safe-top); }
+::-webkit-scrollbar { width: 0; height: 0; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.btn-premium { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); transition: all 0.2s ease; }
+.btn-premium:active { transform: scale(0.98); box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2); }
+.card-premium { background: #fff; border: 1px solid #f0f0f0; box-shadow: 0 2px 10px rgba(0,0,0,0.03); transition: all 0.3s ease; }
+.input-premium { background: #fff; border: 1px solid #e5e7eb; transition: all 0.2s ease; color: #1a1a1a; }
+.input-premium:focus { border-color: rgba(16, 185, 129, 0.5); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); outline: none; }
+.badge-premium { background: #e8fff1; color: #15b566; }

@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Server runtime logs (localhost)
+server*.log
+*.log
+
+# Secrets — NEVER commit
+firebase-service-account.json
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Binary/artifacts that must not bloat the App Hosting repo clone
+Tetherly.apk
+android/build_log*.txt
+android/.gradle/
+android/app/build/
+.firebase/
+
+# Misc
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+.vscode/
+.idea/

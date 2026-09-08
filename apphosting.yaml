@@ -1,0 +1,14 @@
+# Firebase App Hosting configuration
+# Build: default `npm run build` (server build, NOT the NEXT_STATIC export)
+
+runConfig:
+  runtime: nodejs22
+  cpu: 1
+  memoryMiB: 512
+  concurrency: 80
+  minInstances: 0
+
+env:
+  # Firebase Admin credentials live in Secret Manager — never in the repo.
+  - variable: FIREBASE_SERVICE_ACCOUNT
+    secret: FIREBASE_SERVICE_ACCOUNT
