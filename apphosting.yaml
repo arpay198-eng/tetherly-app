@@ -12,3 +12,9 @@ env:
   # Firebase Admin credentials live in Secret Manager — never in the repo.
   - variable: FIREBASE_SERVICE_ACCOUNT
     secret: FIREBASE_SERVICE_ACCOUNT
+  # Deposit wallet address — needed at build time for NEXT_PUBLIC exposure.
+  - variable: NEXT_PUBLIC_DEPOSIT_WALLET_BEP20
+    value: "0x81EBa2Cb09a9e65225E7246D561038064Ff9be39"
+  # Server-side auto-verify uses this (not exposed to client).
+  - variable: TETHERLY_DEPOSIT_WALLET_BEP20
+    value: "0x81EBa2Cb09a9e65225E7246D561038064Ff9be39"
