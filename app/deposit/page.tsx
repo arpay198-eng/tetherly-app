@@ -41,6 +41,8 @@ export default function DepositPage() {
     if (verifyState !== 'idle') setVerifyState('idle');
   };
 
+  const BSC_TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
+
   const handleDeposit = () => {
     const val = parseFloat(amount);
     if (!val || val <= 0) {
@@ -49,9 +51,20 @@ export default function DepositPage() {
       return;
     }
 
+    const trimmedHash = txHash.trim();
+    if (!trimmedHash) {
+      setVerifyState('error');
+      setVerifyMsg('Transaction Hash (TxID) is required. Paste your BSC transaction hash.');
+      return;
+    }
+    if (!BSC_TX_HASH_RE.test(trimmedHash)) {
+      setVerifyState('error');
+      setVerifyMsg('Invalid TxID format. Must be a 66-character BSC hash starting with 0x (e.g. 0xabc...).');
+      return;
+    }
+
     try {
-      // Create pending deposit request in Firestore & Store
-      const depositReq = deposit(val, network, txHash.trim());
+      const depositReq = deposit(val, network, trimmedHash);
       if (depositReq) {
         setVerifyState('verified');
         setVerifyMsg(`Deposit request of ${val} USDT submitted! Your request has been queued for verification.`);
@@ -70,7 +83,10 @@ export default function DepositPage() {
   const transactions = rawTx.filter((tx) => tx && tx.type === 'deposit');
   const filteredTx = filterTab === 'all' ? transactions : transactions.filter((tx) => tx && tx.status === filterTab);
 
-  return (
+  const txHashValid = BSC_TX_HASH_RE.test(txHash.trim());
+    const canSubmit = amount && parseFloat(amount) > 0 && txHashValid;
+
+    return (
     <div className="min-h-screen pb-28" style={{ background: '#f3f5f7' }}>
       <div className="px-5 pt-5 pb-6">
         <h1 className="text-xl font-bold mb-5" style={{ color: '#1a1a1a' }}>Deposit USDT</h1>
@@ -184,19 +200,19 @@ export default function DepositPage() {
               style={{ color: '#1a1a1a' }}
             />
             <span className="text-[10px] text-slate-400 mt-1 block">
-              Enter your TxID if available, or submit now and verify with admin.
+              Required. Paste the transaction hash from your BSC wallet after sending USDT.
             </span>
           </div>
 
           <button
             onClick={handleDeposit}
-            disabled={!amount || parseFloat(amount) <= 0}
+            disabled={!canSubmit}
             className="w-full py-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
             style={{
-              background: (!amount || parseFloat(amount) <= 0) ? '#d1faeb' : '#10b981',
-              color: (!amount || parseFloat(amount) <= 0) ? '#9fb8ad' : '#fff',
-              boxShadow: (!amount || parseFloat(amount) <= 0) ? 'none' : '0 4px 14px rgba(16,185,129,0.3)',
-              cursor: (!amount || parseFloat(amount) <= 0) ? 'not-allowed' : 'pointer',
+              background: (!canSubmit) ? '#d1faeb' : '#10b981',
+              color: (!canSubmit) ? '#9fb8ad' : '#fff',
+              boxShadow: (!canSubmit) ? 'none' : '0 4px 14px rgba(16,185,129,0.3)',
+              cursor: (!canSubmit) ? 'not-allowed' : 'pointer',
             }}
           >
             Submit Deposit for Verification

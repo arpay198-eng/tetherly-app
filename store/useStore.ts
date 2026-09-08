@@ -318,8 +318,10 @@ export const useStore = create<AppState>()(
     const { user } = get();
     if (!user || amount <= 0) return null;
 
+    const hash = txHash?.trim();
+    if (!hash) return null;
+
     const depId = `dep_${Date.now()}`;
-    const hash = txHash?.trim() || `${network}_${Math.random().toString(36).slice(2, 12).toUpperCase()}`;
 
     const req: DepositRequest = {
       id: depId,

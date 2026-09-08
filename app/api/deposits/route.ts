@@ -39,6 +39,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Transaction hash is required' }, { status: 400 });
     }
 
+    // Validate BSC transaction hash format: 0x + 64 hex characters.
+    const BSC_TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
+    if (!BSC_TX_HASH_RE.test(txHash.trim())) {
+      return NextResponse.json({ error: 'Invalid TxID format. Must be a 66-character BSC hash (0x + 64 hex).' }, { status: 400 });
+    }
+
     const adminDb = getAdminDb();
 
     if (status === 'pending') {
