@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { id, type, amount, network, status, date, hash } = body;
+    const { type, amount, network, status, date, hash } = body;
 
     if (!type || !amount || !network || !status) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -30,10 +30,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
+    // Non-admin users can only create transactions for themselves.
+    const txUserId = auth.isAdmin ? (body.userId || auth.id) : auth.id;
+
     const adminDb = getAdminDb();
-    const txRef = adminDb.collection('transactions').doc(String(id));
+    // Server-generated ID — ignore any client-supplied id.
+    const txRef = adminDb.collection('transactions').doc();
+    const id = txRef.id;
     const data: Record<string, unknown> = {
       id,
+      userId: txUserId,
       type,
       amount,
       network,
@@ -41,7 +47,7 @@ export async function POST(request: Request) {
       date: date || new Date().toISOString(),
     };
     if (hash) data.hash = hash;
-    await txRef.set(data, { merge: true });
+    await txRef.set(data);
 
     return NextResponse.json({ success: true, id });
   } catch (error) {

@@ -15,7 +15,9 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { id, userId, userName, userEmail, amount, address, network, status, date } = body;
+    const { userId, userName, userEmail, amount, address, network, status, date } = body;
+    // Admin transitions send the existing withdrawal ID; new pending don't.
+    const clientId = body.id;
 
     if (!userId || !amount || !address || !network || !status) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -38,8 +40,6 @@ export async function POST(request: Request) {
     }
 
     const adminDb = getAdminDb();
-    const wdRef = adminDb.collection('withdrawals').doc(String(id));
-    const userRef = adminDb.collection('users').doc(String(userId));
 
     if (status === 'pending') {
       // User submits a new withdrawal: server validates balance/lock and deducts atomically.
@@ -61,6 +61,11 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Invalid password. Please try again.' }, { status: 401 });
         }
       }
+
+      // Server-generated ID for new withdrawals.
+      const wdRef = adminDb.collection('withdrawals').doc();
+      const id = wdRef.id;
+      const userRef = adminDb.collection('users').doc(String(userId));
 
       try {
         const result = await adminDb.runTransaction(async (tx) => {
@@ -136,6 +141,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Only admins can change withdrawal status' }, { status: 403 });
     }
 
+    if (!clientId) {
+      return NextResponse.json({ error: 'Withdrawal id is required for admin transitions' }, { status: 400 });
+    }
+
+    const wdRef = adminDb.collection('withdrawals').doc(String(clientId));
+    const userRef = adminDb.collection('users').doc(String(userId));
+
     const snapshot = await wdRef.get();
     if (!snapshot.exists) {
       return NextResponse.json({ error: 'Withdrawal request not found' }, { status: 404 });
@@ -169,7 +181,7 @@ export async function POST(request: Request) {
       );
     } else {
       await wdRef.set({
-        id,
+        id: clientId,
         userId,
         userName: userName || '',
         userEmail: userEmail || '',
@@ -189,7 +201,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, id });
+    return NextResponse.json({ success: true, id: clientId });
   } catch (error) {
     console.error('API withdrawals error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

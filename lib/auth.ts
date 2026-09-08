@@ -1,6 +1,8 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 
-const SECRET = process.env.AUTH_SECRET || 'tetherly-local-dev-secret';
+// Require AUTH_SECRET in production. Fall back to a random per-instance secret
+// so tokens can never be forged using a known hardcoded value.
+const SECRET = process.env.AUTH_SECRET || randomBytes(32).toString('hex');
 
 export interface AuthPayload {
   id: string;

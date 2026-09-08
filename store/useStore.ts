@@ -224,15 +224,10 @@ export const useStore = create<AppState>()(
     if (get().allUsers.find((u) => u.email.toLowerCase() === cleanEmail)) return false;
     if (testUsers.find((u) => u.email.toLowerCase() === cleanEmail)) return false;
 
-    const id = generateUid();
     const cleanRef = (referralInput || '').trim().toUpperCase();
 
-    // Single server-verified create. Throws on error so the UI can show the
-    // server's real message (e.g. "Email already registered..."). No second
-    // client-side write — that used to create the account on the server while
-    // the UI falsely reported failure.
+    // Server generates the ID — client does not supply one.
     const res = await apiPost('/users', {
-      id,
       name: name.trim(),
       email: cleanEmail,
       phone: phone ? phone.trim() : '',
@@ -242,7 +237,7 @@ export const useStore = create<AppState>()(
       password: cleanPassword,
       referredBy: cleanRef || '',
     });
-    const serverId = String(res?.id || id);
+    const serverId = String(res?.id);
     const serverReferralCode = String(res?.referralCode || `TETH${serverId.slice(-4).toUpperCase()}`);
 
     set({

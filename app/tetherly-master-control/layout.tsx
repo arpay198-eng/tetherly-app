@@ -64,13 +64,28 @@ export default function MasterControlLayout({ children }: { children: React.Reac
       const unlocked = sessionStorage.getItem('tetherly_master_unlocked')
       const storedProfile = sessionStorage.getItem('tetherly_admin_profile')
       if (unlocked === 'true') {
-        setIsUnlocked(true)
-        if (storedProfile) {
-          try {
-            setAdminProfile(JSON.parse(storedProfile))
-          } catch {
-            // ignore
-          }
+        // Re-verify the stored JWT server-side before trusting sessionStorage.
+        const token = localStorage.getItem('tetherly_auth_token')
+        if (!token) {
+          sessionStorage.removeItem('tetherly_master_unlocked')
+          sessionStorage.removeItem('tetherly_admin_profile')
+        } else {
+          fetch('/api/users', { headers: { Authorization: `Bearer ${token}` } })
+            .then((r) => {
+              if (r.ok) {
+                setIsUnlocked(true)
+                if (storedProfile) {
+                  try { setAdminProfile(JSON.parse(storedProfile)) } catch {}
+                }
+              } else {
+                sessionStorage.removeItem('tetherly_master_unlocked')
+                sessionStorage.removeItem('tetherly_admin_profile')
+                localStorage.removeItem('tetherly_auth_token')
+              }
+            })
+            .catch(() => {
+              // Network error — keep existing state, will retry on next action.
+            })
         }
       }
 

@@ -15,7 +15,9 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { id, userId, userName, userEmail, amount, network, txHash, status, date } = body;
+    const { userId, userName, userEmail, amount, network, txHash, status, date } = body;
+    // Admin approval sends the existing deposit ID; new pending deposits don't send one.
+    const clientId = body.id;
 
     if (!userId || !amount || !network || !txHash || !status) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -47,15 +49,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Only admins can change deposit status' }, { status: 403 });
     }
 
-    const depositRef = adminDb.collection('deposits').doc(String(id));
-
-    // Admin approval performs the real server-side credit (balance + depositBalance
-    // + 24h lock anchor + referral bonus), identically to auto-verify. This keeps
-    // the financial state consistent no matter who finalizes the deposit.
-    if (status === 'completed') {
+    // Admin approval requires the existing deposit ID.
+    if (status === 'completed' || status === 'rejected') {
+      if (!clientId) {
+        return NextResponse.json({ error: 'Deposit id is required for admin approval/rejection' }, { status: 400 });
+      }
       if (!auth.isAdmin) {
         return NextResponse.json({ error: 'Only admins can change deposit status' }, { status: 403 });
       }
+      const depositRef = adminDb.collection('deposits').doc(String(clientId));
       const existing = await depositRef.get();
       if (!existing.exists) {
         return NextResponse.json({ error: 'Deposit request not found' }, { status: 404 });
@@ -64,15 +66,26 @@ export async function POST(request: Request) {
       if (current.status !== 'pending') {
         return NextResponse.json({ error: 'Deposit is already processed' }, { status: 400 });
       }
-      const hashToUse = txHash || current.txHash || `admin_${Date.now()}`;
-      const outcome = await finalizeDeposit(
-        { ...current, id: String(id), txHash: hashToUse },
-        Number(current.amount ?? amount),
-        hashToUse,
-        'admin'
-      );
-      return NextResponse.json({ success: true, id, verified: outcome.verified, credited: outcome.credited, reason: outcome.reason });
+
+      if (status === 'completed') {
+        const hashToUse = txHash || current.txHash || `admin_${Date.now()}`;
+        const outcome = await finalizeDeposit(
+          { ...current, id: String(clientId), txHash: hashToUse },
+          Number(current.amount ?? amount),
+          hashToUse,
+          'admin'
+        );
+        return NextResponse.json({ success: true, id: clientId, verified: outcome.verified, credited: outcome.credited, reason: outcome.reason });
+      }
+
+      // status === 'rejected'
+      await depositRef.set({ status: 'rejected', rejectReason: body.rejectReason || 'Rejected by admin' }, { merge: true });
+      return NextResponse.json({ success: true, id: clientId, status: 'rejected' });
     }
+
+    // New pending deposit: server-generated ID.
+    const depositRef = adminDb.collection('deposits').doc();
+    const id = depositRef.id;
 
     const data: Record<string, unknown> = {
       id,
@@ -85,20 +98,15 @@ export async function POST(request: Request) {
       status,
       date: date || new Date().toISOString(),
     };
-    if (body.reviewedAt) data.reviewedAt = body.reviewedAt;
-    if (body.reviewedBy) data.reviewedBy = body.reviewedBy;
-    if (body.rejectReason) data.rejectReason = body.rejectReason;
-    await depositRef.set(data, { merge: true });
+    await depositRef.set(data);
 
-    if (status === 'pending') {
-      pushNotification(
-        String(userId),
-        'Deposit Submitted',
-        `Your deposit of ${Number(amount).toFixed(2)} USDT (${network}) was submitted. We are verifying your payment.`,
-        'info'
-      );
-      triggerAutoVerify();
-    }
+    pushNotification(
+      String(userId),
+      'Deposit Submitted',
+      `Your deposit of ${Number(amount).toFixed(2)} USDT (${network}) was submitted. We are verifying your payment.`,
+      'info'
+    );
+    triggerAutoVerify();
 
     return NextResponse.json({ success: true, id });
   } catch (error) {

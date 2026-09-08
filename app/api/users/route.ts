@@ -22,10 +22,12 @@ async function wouldCreateCycle(userId: string, inviterId: string): Promise<bool
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { id, name, email, phone, balance, status, joinedDate, password, lastDepositDate, lastDepositAmount, bonusClaimed, depositBalance, referredBy } = body;
+    const { name, email, phone, balance, status, joinedDate, password, lastDepositDate, lastDepositAmount, bonusClaimed, depositBalance, referredBy } = body;
+    // id is only accepted for admin updates of existing users (see below).
+    const clientId = body.id;
 
-    if (!id || !email) {
-      return NextResponse.json({ error: 'id and email are required' }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ error: 'email is required' }, { status: 400 });
     }
 
     if (balance !== undefined && balance < 0) {
@@ -44,9 +46,12 @@ export async function POST(request: Request) {
     }
 
     const adminDb = getAdminDb();
-    const userRef = adminDb.collection('users').doc(String(id));
-    const existing = await userRef.get();
     const auth = getAuth(request);
+
+    // Self-registration: no client-supplied ID — server generates a unique one.
+    const serverId = String(Math.floor(1000000000 + Math.random() * 9000000000));
+    const userRef = adminDb.collection('users').doc(serverId);
+    const existing = await userRef.get();
 
     if (!existing.exists) {
       // Open path: self-registration only. New users must start clean.
@@ -79,14 +84,14 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: `Invalid referral code "${cleanRef}"` }, { status: 400 });
         }
         const codeData = codeSnap.data() || {};
-        if (codeData.userId === id) {
+        if (String(codeData.userId) === String(serverId)) {
           return NextResponse.json({ error: 'You cannot use your own referral code' }, { status: 400 });
         }
         referredById = String(codeData.userId || '');
         referredByName = String(codeData.name || '');
       }
 
-      if (referredById && (await wouldCreateCycle(String(id), referredById))) {
+      if (referredById && (await wouldCreateCycle(serverId, referredById))) {
         return NextResponse.json({ error: 'Referral cycle detected: an ancestor already invited you' }, { status: 400 });
       }
 
@@ -100,7 +105,7 @@ export async function POST(request: Request) {
       }
 
       await userRef.set({
-        id,
+        id: serverId,
         name: name || '',
         email: email.toLowerCase().trim(),
         phone: phone || '',
@@ -113,12 +118,12 @@ export async function POST(request: Request) {
       }, { merge: true });
       await adminDb.collection('referral_codes').doc(referralCode).set({
         code: referralCode,
-        userId: String(id),
+        userId: String(serverId),
         name: name || '',
         email: email.toLowerCase().trim(),
       });
 
-      return NextResponse.json({ success: true, id, referralCode });
+      return NextResponse.json({ success: true, id: serverId, referralCode });
     }
 
     // Existing user updates: ADMIN ONLY.
@@ -126,6 +131,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden: admin access required' }, { status: 403 });
     }
 
+    if (!clientId) {
+      return NextResponse.json({ error: 'id is required for admin updates' }, { status: 400 });
+    }
+
+    const adminRef = adminDb.collection('users').doc(String(clientId));
     const data: Record<string, unknown> = {};
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = email.toLowerCase().trim();
@@ -141,13 +151,13 @@ export async function POST(request: Request) {
     if (referredBy !== undefined) data.referredBy = referredBy;
 
     // Guard admin edits against wiring up a referral cycle.
-    if (referredBy !== undefined && String(referredBy).trim() !== '' && (await wouldCreateCycle(String(id), String(referredBy).trim()))) {
+    if (referredBy !== undefined && String(referredBy).trim() !== '' && (await wouldCreateCycle(String(clientId), String(referredBy).trim()))) {
       return NextResponse.json({ error: 'Referral cycle detected' }, { status: 400 });
     }
 
-    await userRef.set(data, { merge: true });
+    await adminRef.set(data, { merge: true });
 
-    return NextResponse.json({ success: true, id });
+    return NextResponse.json({ success: true, id: clientId });
   } catch (error) {
     console.error('API users error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
