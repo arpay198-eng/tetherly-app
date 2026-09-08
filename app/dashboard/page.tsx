@@ -4,12 +4,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useStore } from '@/store/useStore';
+import { apiGet } from '@/lib/firebaseService';
 import MobileNav from '@/components/layout/MobileNav';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { isLoggedIn, wallet, user, lastDepositDate, lastDepositAmount, bonusClaimed, transactions, claimBonus, notifications, loadNotifications } = useStore();
   const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0 });
+  const [serverTx, setServerTx] = useState<any[]>([]);
 
   const getRemaining = useCallback(() => {
     if (!lastDepositDate || lastDepositAmount <= 0 || bonusClaimed) return 0;
@@ -33,15 +35,21 @@ export default function DashboardPage() {
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     void loadNotifications();
+    // For non-admin users, fetch transactions from server (store is empty).
+    if (user && !user.isAdmin && transactions.length === 0) {
+      apiGet(`/transactions?userId=${user.id}`).then((data) => {
+        if (Array.isArray(data)) setServerTx(data);
+      }).catch(() => {});
+    }
     return () => clearInterval(interval);
-  }, [isLoggedIn, router, getRemaining, loadNotifications]);
+  }, [isLoggedIn, router, getRemaining, loadNotifications, user, transactions.length]);
 
   if (!isLoggedIn) return null;
 
   const hasDeposit = !!lastDepositDate && lastDepositAmount > 0 && wallet.depositBalance > 0;
   const bonusAmount = hasDeposit ? wallet.depositBalance * 0.04 : 0;
   const canClaim = hasDeposit && !bonusClaimed && getRemaining() === 0;
-  const recentTx = transactions.slice(0, 5);
+  const recentTx = transactions.length > 0 ? transactions.slice(0, 5) : serverTx.slice(0, 5);
 
   const formatAmount = (n: number) => {
     const abs = Math.abs(n);
