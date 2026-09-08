@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { getAuth } from '@/lib/auth';
+import { hashPassword } from '@/lib/password';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
         balance: balance || 0,
         status: status || 'active',
         joinedDate: joinedDate || new Date().toISOString().split('T')[0],
-        password,
+        password: await hashPassword(String(password)),
         referralCode,
         ...(referredById ? { referredBy: referredById, referredByName } : {}),
       }, { merge: true });
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
     if (balance !== undefined) data.balance = balance;
     if (status !== undefined) data.status = status;
     if (joinedDate !== undefined) data.joinedDate = joinedDate;
-    if (password !== undefined) data.password = password;
+    if (password !== undefined) data.password = await hashPassword(String(password));
     if (lastDepositDate !== undefined) data.lastDepositDate = lastDepositDate;
     if (lastDepositAmount !== undefined) data.lastDepositAmount = lastDepositAmount;
     if (bonusClaimed !== undefined) data.bonusClaimed = bonusClaimed;

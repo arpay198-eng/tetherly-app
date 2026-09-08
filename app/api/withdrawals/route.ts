@@ -2,6 +2,8 @@
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { getAuth } from '@/lib/auth';
 import { pushNotification } from '@/lib/notifications';
+import { verifyPassword } from '@/lib/password';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +14,15 @@ export async function POST(request: Request) {
     const auth = getAuth(request);
     if (!auth) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Rate limit: 5 withdrawal attempts per minute per user.
+    const rl = checkRateLimit(`withdrawals:${auth.id}`, 5, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many requests. Try again in ${Math.ceil(rl.retryAfterMs / 1000)}s.` },
+        { status: 429 },
+      );
     }
 
     const body = await request.json();
@@ -57,7 +68,7 @@ export async function POST(request: Request) {
         }
         const uSnap = await adminDb.collection('users').doc(String(userId)).get();
         const userRecord = uSnap.exists ? uSnap.data() : null;
-        if (!userRecord || String(userRecord.password || '') !== confirmPassword) {
+        if (!userRecord || !(await verifyPassword(confirmPassword, userRecord.password || ''))) {
           return NextResponse.json({ error: 'Invalid password. Please try again.' }, { status: 401 });
         }
       }

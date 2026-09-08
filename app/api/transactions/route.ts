@@ -30,6 +30,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
+    // Non-admin users can only create transactions with status='pending'.
+    // Only admins can mark transactions as 'completed' or 'failed'.
+    if (!auth.isAdmin && status !== 'pending') {
+      return NextResponse.json({ error: 'Only admins can set transaction status to completed/failed' }, { status: 403 });
+    }
+
     // Non-admin users can only create transactions for themselves.
     const txUserId = auth.isAdmin ? (body.userId || auth.id) : auth.id;
 

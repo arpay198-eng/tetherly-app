@@ -4,6 +4,7 @@ import { triggerAutoVerify } from '@/lib/autoVerifyScheduler';
 import { finalizeDeposit } from '@/lib/autoVerifyCore';
 import { getAuth } from '@/lib/auth';
 import { pushNotification } from '@/lib/notifications';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,15 @@ export async function POST(request: Request) {
     const auth = getAuth(request);
     if (!auth) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Rate limit: 10 deposit submissions per minute per user.
+    const rl = checkRateLimit(`deposits:${auth.id}`, 10, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many requests. Try again in ${Math.ceil(rl.retryAfterMs / 1000)}s.` },
+        { status: 429 },
+      );
     }
 
     const body = await request.json();

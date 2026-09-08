@@ -2,6 +2,8 @@
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { signToken, getAuth } from '@/lib/auth';
 import { pushNotification } from '@/lib/notifications';
+import { verifyPassword } from '@/lib/password';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,11 +36,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       const userRecord = userSnap.data()!;
-      if (!userRecord.password || userRecord.password !== cur) {
+      if (!userRecord.password || !(await verifyPassword(cur, userRecord.password))) {
         return NextResponse.json({ error: 'Current password is incorrect' }, { status: 401 });
       }
 
-      await userRef.update({ password: next, updatedAt: new Date().toISOString() });
+      const { hashPassword } = await import('@/lib/password');
+      await userRef.update({ password: await hashPassword(next), updatedAt: new Date().toISOString() });
 
       // Rotate token so only the new password session stays valid.
       const isAdmin = userRecord.role === 'admin' || userRecord.isAdmin === true;
@@ -73,6 +76,15 @@ export async function POST(request: Request) {
     const cleanEmail = String(email).trim().toLowerCase();
     const cleanPassword = String(password).trim();
 
+    // Rate limit: 5 login attempts per minute per email.
+    const rl = checkRateLimit(`login:${cleanEmail}`, 5, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many login attempts. Try again in ${Math.ceil(rl.retryAfterMs / 1000)}s.` },
+        { status: 429 },
+      );
+    }
+
     const adminDb = getAdminDb();
 
     let userRecord: any = null;
@@ -90,7 +102,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Server verification unavailable' }, { status: 500 });
     }
 
-    if (!userRecord || !userRecord.password || userRecord.password !== cleanPassword) {
+    if (!userRecord || !userRecord.password) {
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+    }
+
+    // Support both hashed (bcrypt) and legacy plaintext passwords.
+    // On successful plaintext match, migrate to hash automatically.
+    let passwordValid = false;
+    if (await verifyPassword(cleanPassword, userRecord.password)) {
+      passwordValid = true;
+    } else if (userRecord.password === cleanPassword) {
+      // Legacy plaintext match — migrate to hash immediately.
+      passwordValid = true;
+      const { hashPassword } = await import('@/lib/password');
+      const userRef = adminDb.collection('users').doc(String(userRecord.id));
+      await userRef.update({ password: await hashPassword(cleanPassword) });
+    }
+
+    if (!passwordValid) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
