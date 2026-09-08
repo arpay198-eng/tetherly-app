@@ -6,8 +6,8 @@ const USDT_BEP20_DECIMALS = 18;
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const TOLERANCE_USDT = 0.01;
 const TRANSFER_WINDOW_MS = 72 * 60 * 60 * 1000;
-// Auto-fail pending deposits that never arrived on-chain (30-minute SLA).
-const DEPOSIT_EXPIRE_MS = 30 * 60 * 1000;
+// Auto-fail pending deposits that never arrived on-chain (10-minute SLA).
+const DEPOSIT_EXPIRE_MS = 10 * 60 * 1000;
 const BSC_AVG_BLOCK_MS = 3000;
 const CHUNK_BLOCKS = 8000;
 const RPC_RETRIES = 2;
