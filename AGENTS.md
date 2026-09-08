@@ -17,6 +17,7 @@
 
 4. **Critical Constraints:**
    - **APK Build Rule:** User jab tak explicitly command na kare, tab tak koi bhi APK build (./gradlew, cap build, etc.) generate nahi karna hai.
+   - **APK Output Rule:** Jab bhi APK build ho (android -> `assembleDebug`), finished APK hamesha `E:\APK\` me copy karna (`E:\APK\Tetherly-LIVE.apk`) taaki hamesha latest build E drive par available rahe.
    - **Project Isolation:** tetherly-usdt database aur configurations strictly isolated rahenge.
 
 ## ⚡ LOCALHOST SERVER RULES (PERMANENT FIX)

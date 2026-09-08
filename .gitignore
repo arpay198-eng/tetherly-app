@@ -18,7 +18,7 @@ firebase-service-account.json
 !.env.example
 
 # Binary/artifacts that must not bloat the App Hosting repo clone
-Tetherly.apk
+*.apk
 android/build_log*.txt
 android/.gradle/
 android/app/build/

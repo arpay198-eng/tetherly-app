@@ -116,7 +116,7 @@ export interface AppState {
   lastDepositAmount: number;
   bonusClaimed: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (name: string, email: string, phone: string, password: string) => Promise<boolean>;
+  register: (name: string, email: string, phone: string, password: string, referralInput?: string) => Promise<boolean>;
   logout: () => void;
   deposit: (amount: number, network: 'BEP20', txHash?: string) => DepositRequest | null;
   approveDeposit: (id: string, hash?: string) => void;
@@ -217,7 +217,7 @@ export const useStore = create<AppState>()(
     return true;
   },
 
-  register: async (name: string, email: string, phone: string, password: string) => {
+  register: async (name: string, email: string, phone: string, password: string, referralInput?: string) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
@@ -225,41 +225,42 @@ export const useStore = create<AppState>()(
     if (testUsers.find((u) => u.email.toLowerCase() === cleanEmail)) return false;
 
     const id = generateUid();
+    const cleanRef = (referralInput || '').trim().toUpperCase();
 
-    const newUserItem: AdminUserItem = {
+    // Single server-verified create. Throws on error so the UI can show the
+    // server's real message (e.g. "Email already registered..."). No second
+    // client-side write — that used to create the account on the server while
+    // the UI falsely reported failure.
+    const res = await apiPost('/users', {
       id,
       name: name.trim(),
       email: cleanEmail,
-      password: cleanPassword,
       phone: phone ? phone.trim() : '',
       balance: 0,
       status: 'active',
       joinedDate: new Date().toISOString().split('T')[0],
-    };
-
-    try {
-      await syncUserToFirestore(newUserItem);
-    } catch (error) {
-      console.error('Error persisting new user:', error);
-      return false;
-    }
+      password: cleanPassword,
+      referredBy: cleanRef || '',
+    });
+    const serverId = String(res?.id || id);
+    const serverReferralCode = String(res?.referralCode || `TETH${serverId.slice(-4).toUpperCase()}`);
 
     set({
       user: {
-        id,
-        name: newUserItem.name,
-        email: newUserItem.email,
-        phone: newUserItem.phone || '',
+        id: serverId,
+        name: name.trim(),
+        email: cleanEmail,
+        phone: phone ? phone.trim() : '',
         isAdmin: false,
         kycStatus: 'none',
-        referralCode: newUserItem.referralCode || `TETH${id.slice(-4).toUpperCase()}`,
-        referredBy: newUserItem.referredBy || null,
-        referredByName: newUserItem.referredByName || null,
+        referralCode: serverReferralCode,
+        referredBy: cleanRef || null,
+        referredByName: null,
         referralCount: 0,
         referralEarned: 0,
         referralEarnedLevel2: 0,
       },
-      allUsers: [...get().allUsers, newUserItem],
+      allUsers: [...get().allUsers],
       wallet: { balance: 0, depositBalance: 0, bonusBalance: 0 },
       notifications: [
         { id: 'notif_welcome', title: 'Welcome to Tetherly', message: 'Your account is ready. Make a deposit to get started!', read: false, date: new Date().toISOString(), type: 'success' },

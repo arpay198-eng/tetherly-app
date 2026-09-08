@@ -50,6 +50,13 @@ export async function POST(request: Request) {
 
     if (!existing.exists) {
       // Open path: self-registration only. New users must start clean.
+      // Enforce server-side email uniqueness so a duplicate account (and the
+      // "registered but told it failed" confusion) can never happen.
+      const cleanEmail = email.toLowerCase().trim();
+      const dupSnap = await adminDb.collection('users').where('email', '==', cleanEmail).limit(1).get();
+      if (!dupSnap.empty) {
+        return NextResponse.json({ error: 'Email already registered. Please sign in instead.' }, { status: 409 });
+      }
       if (balance !== undefined && balance !== 0) {
         return NextResponse.json({ error: 'New users must start with balance 0' }, { status: 400 });
       }

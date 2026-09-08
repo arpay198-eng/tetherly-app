@@ -3,10 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useStore, AdminUserItem } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { syncUserToFirestore } from '@/lib/firebaseService';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -60,34 +59,17 @@ export default function RegisterPage() {
         return;
       }
 
-      // 2. Generate unique user ID and initialize with strictly 0 balance
-      const newUserId = String(Math.floor(1000000000 + Math.random() * 9000000000));
-      const today = new Date().toISOString().split('T')[0];
-
-      const newUserItem: AdminUserItem = {
-        id: newUserId,
-        name: cleanName,
-        email: cleanEmail,
-        password: password,
-        phone: '',
-        balance: 0,
-        status: 'active',
-        joinedDate: today,
-        referredBy: referral.trim().toUpperCase() || undefined,
-      };
-
-      // 3. Persist to Firebase Server first
-      await syncUserToFirestore(newUserItem);
-
-      // 4. Update local client session
-      const success = await register(cleanName, cleanEmail, '', password);
+      // 3. Single server-verified create + session. Throws if the email is
+      // already taken (server enforces uniqueness), so the UI shows the real
+      // error instead of falsely saying "failed" after the account was created.
+      const success = await register(cleanName, cleanEmail, '', password, referral);
       if (success) {
         router.push('/dashboard');
       } else {
-        setError('Registration failed. Please try again.');
+        setError('Email already registered. Please sign in instead.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Server registration failed');
+      setError(err?.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
