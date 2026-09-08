@@ -4,8 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useStore } from '@/store/useStore';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -38,26 +36,8 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // 1. Verify email uniqueness on Firebase server first
-      try {
-        const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          setError('Email already registered on server. Please sign in instead.');
-          setLoading(false);
-          return;
-        }
-      } catch (err) {
-        console.warn('Firebase uniqueness check fallback:', err);
-      }
-
-      // Check store fallback
-      const allUsers = useStore.getState().allUsers;
-      if (allUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
-        setError('Email already registered. Please sign in instead.');
-        setLoading(false);
-        return;
-      }
+      // Server handles email uniqueness check (returns 409 if duplicate).
+      // No client-side Firestore read needed.
 
       // 3. Single server-verified create + session. Throws if the email is
       // already taken (server enforces uniqueness), so the UI shows the real

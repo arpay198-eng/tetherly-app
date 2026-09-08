@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
+import { apiGet } from '@/lib/firebaseService';
 import MobileNav from '@/components/layout/MobileNav';
 
 export default function ReferralPage() {
@@ -23,17 +24,13 @@ export default function ReferralPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/users?referredBy=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('bad status');
-        const data = await res.json();
+        const data = await apiGet(`/users?referredBy=${encodeURIComponent(user.id)}`);
         const l1: any[] = Array.isArray(data) ? data : [];
         if (!cancelled) setReferredUsers(l1);
         const l2: any[] = [];
         for (const u of l1) {
           try {
-            const r2 = await fetch(`/api/users?referredBy=${encodeURIComponent(u.id)}`, { cache: 'no-store' });
-            if (!r2.ok) continue;
-            const d2 = await r2.json();
+            const d2 = await apiGet(`/users?referredBy=${encodeURIComponent(u.id)}`);
             if (Array.isArray(d2)) d2.forEach((u2: any) => l2.push({ ...u2, via: u }));
           } catch (e) { /* skip */ }
         }

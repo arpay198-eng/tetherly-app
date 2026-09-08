@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useStore, AdminUserItem, WithdrawalRequest, DepositRequest, Transaction } from '@/store/useStore'
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { apiPost, apiGet } from '@/lib/firebaseService'
 
 export default function MasterControlLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -175,68 +174,26 @@ export default function MasterControlLayout({ children }: { children: React.Reac
     setIsVerifying(true)
 
     try {
-      let foundUser: AdminUserItem | null = null
-
-      // 1. Direct real-time lookup in Firebase Firestore by document ID
-      try {
-        const docRef = doc(db, 'users', cleanId)
-        const docSnap = await getDoc(docRef)
-        if (docSnap.exists()) {
-          foundUser = docSnap.data() as AdminUserItem
-        }
-      } catch (err) {
-        console.warn('Doc lookup error:', err)
-      }
-
-      // 2. If not found by ID, query Firebase Firestore by email
-      if (!foundUser) {
-        try {
-          const q = query(collection(db, 'users'), where('email', '==', cleanId))
-          const querySnap = await getDocs(q)
-          if (!querySnap.empty) {
-            foundUser = querySnap.docs[0].data() as AdminUserItem
-          }
-        } catch (err) {
-          console.warn('Query lookup error:', err)
-        }
-      }
-
-      // 3. Fallback to store if offline
-      if (!foundUser && allUsers && allUsers.length > 0) {
-        foundUser =
-          allUsers.find(
-            (u) => u.email.toLowerCase() === cleanId || u.id.toLowerCase() === cleanId
-          ) || null
-      }
-
-      // 4. Verify account existence in Firebase
-      if (!foundUser) {
-        registerFailedAttempt('Access Denied: Account not found in Firebase.')
+      // Server-side authentication via API (no direct Firestore password read).
+      const res = await apiPost('/auth', { email: cleanId, password: cleanPass });
+      if (!res || !res.token || !res.user) {
+        registerFailedAttempt('Access Denied: Invalid credentials.')
         setIsVerifying(false)
         return
       }
 
-      // 5. Verify Admin Role / Authorization in Firebase
-      const isAuthorizedAdmin =
-        foundUser.role === 'admin' ||
-        foundUser.isAdmin === true
+      const foundUser = res.user as AdminUserItem;
 
-      if (!isAuthorizedAdmin) {
+      // Verify Admin Role
+      if (!foundUser.isAdmin) {
         registerFailedAttempt('Access Denied: Not an authorized Admin.')
         setIsVerifying(false)
         return
       }
 
-      // 6. Verify Account Status
+      // Verify Account Status
       if (foundUser.status === 'blocked') {
         setLoginError('This Admin account has been blocked.')
-        setIsVerifying(false)
-        return
-      }
-
-      // 7. Verify Password from Firebase
-      if (foundUser.password !== cleanPass) {
-        registerFailedAttempt('Incorrect Password. Authentication failed.')
         setIsVerifying(false)
         return
       }

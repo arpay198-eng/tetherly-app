@@ -133,7 +133,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {user.email === 'admin@tetherly.com' && (
+      {user.isAdmin && (
         <div className="mb-4">
           <button
             onClick={() => router.push('/admin')}

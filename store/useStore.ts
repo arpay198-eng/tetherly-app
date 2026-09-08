@@ -144,11 +144,6 @@ const generateUid = (): string => {
   return String(Math.floor(1000000000 + Math.random() * 9000000000));
 };
 
-const testUsers = [
-  { email: 'admin@tetherly.com', password: 'admin123', name: 'Admin User', id: generateUid() },
-  { email: 'rohim.badsha198@gmail.com', password: 'Rj6542', name: 'Rahim Badsha', id: generateUid() },
-];
-
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -222,7 +217,6 @@ export const useStore = create<AppState>()(
     const cleanPassword = password.trim();
 
     if (get().allUsers.find((u) => u.email.toLowerCase() === cleanEmail)) return false;
-    if (testUsers.find((u) => u.email.toLowerCase() === cleanEmail)) return false;
 
     const cleanRef = (referralInput || '').trim().toUpperCase();
 
