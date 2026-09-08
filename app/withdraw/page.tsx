@@ -3,9 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
+import { apiGet } from '@/lib/firebaseService';
 import MobileNav from '@/components/layout/MobileNav';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 export default function WithdrawPage() {
   const router = useRouter();
@@ -85,19 +84,17 @@ export default function WithdrawPage() {
         return;
       }
 
-      // Server-Side First: Verify user status and balance directly from Firebase
+      // Server-Side First: Verify user status and balance via API
       let serverBalance = wallet.balance;
       try {
-        const userDocRef = doc(db, 'users', currentUser.id);
-        const docSnap = await getDoc(userDocRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (data.status === 'blocked') {
+        const userData = await apiGet(`/users?id=${currentUser.id}`);
+        if (userData) {
+          if (userData.status === 'blocked') {
             setWithdrawError('Your account has been suspended by admin. Withdrawals blocked.');
             setLoading(false);
             return;
           }
-          serverBalance = Number(data.balance ?? 0);
+          serverBalance = Number(userData.balance ?? 0);
         }
       } catch (err) {
         console.warn('Server verification fallback:', err);
