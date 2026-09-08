@@ -156,6 +156,11 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
+    const auth = getAuth(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('id');
     const referredBy = searchParams.get('referredBy');
@@ -168,11 +173,20 @@ export async function GET(request: Request) {
     };
 
     if (userId) {
+      // Non-admin users can only look up their own record.
+      if (!auth.isAdmin && String(userId) !== String(auth.id)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
       const snap = await adminDb.collection('users').doc(userId).get();
       if (!snap.exists) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       return NextResponse.json(stripPassword(snap.data()));
+    }
+
+    // List all users — admin only.
+    if (!auth.isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const snap = await adminDb.collection('users').limit(1000).get();

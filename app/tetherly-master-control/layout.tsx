@@ -204,8 +204,7 @@ export default function MasterControlLayout({ children }: { children: React.Reac
       // 5. Verify Admin Role / Authorization in Firebase
       const isAuthorizedAdmin =
         foundUser.role === 'admin' ||
-        foundUser.isAdmin === true ||
-        foundUser.email?.toLowerCase() === 'rohim.badsha198@gmail.com'
+        foundUser.isAdmin === true
 
       if (!isAuthorizedAdmin) {
         registerFailedAttempt('Access Denied: Not an authorized Admin.')

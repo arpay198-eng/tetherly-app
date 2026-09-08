@@ -310,6 +310,12 @@ export const useStore = create<AppState>()(
       lastDepositDate: null,
       lastDepositAmount: 0,
       bonusClaimed: false,
+      // Clear ALL data to prevent one user's data leaking to the next.
+      transactions: [],
+      notifications: [],
+      withdrawalRequests: [],
+      depositRequests: [],
+      allUsers: [],
     });
   },
 

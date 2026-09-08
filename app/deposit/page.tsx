@@ -27,7 +27,7 @@ export default function DepositPage() {
 
   const depositAddress = (process.env.NEXT_PUBLIC_DEPOSIT_WALLET_BEP20 && !process.env.NEXT_PUBLIC_DEPOSIT_WALLET_BEP20.includes('XXX'))
     ? process.env.NEXT_PUBLIC_DEPOSIT_WALLET_BEP20
-    : '0x55d398326f99059fF775485246999027B3197955';
+    : '';
   const quickAmounts = [10, 50, 100, 500];
 
   const handleCopy = () => {
@@ -106,17 +106,26 @@ export default function DepositPage() {
 
         <div className="rounded-2xl p-5 mb-5 card-premium">
           <div className="flex flex-col items-center mb-5">
-            {/* BEP20 Badge */}
-            <div className="mb-3 px-3 py-1.5 rounded-full text-xs font-bold" style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706', border: '1px solid rgba(245,158,11,0.25)' }}>
-              BSC (Binance Smart Chain)
-            </div>
-            <div className="w-40 h-40 rounded-xl flex items-center justify-center mb-3 overflow-hidden" style={{ background: '#fff', border: '1px solid #f0f0f0' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/deposit-qr.jpeg" alt="BSC USDT Deposit Address QR Code" className="w-40 h-40 object-contain" />
-            </div>
-            <p className="text-xs mb-1" style={{ color: '#999' }}>BSC USDT Deposit Address</p>
+            {depositAddress ? (
+              <>
+                <div className="mb-3 px-3 py-1.5 rounded-full text-xs font-bold" style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706', border: '1px solid rgba(245,158,11,0.25)' }}>
+                  BSC (Binance Smart Chain)
+                </div>
+                <div className="w-40 h-40 rounded-xl flex items-center justify-center mb-3 overflow-hidden" style={{ background: '#fff', border: '1px solid #f0f0f0' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/deposit-qr.jpeg" alt="BSC USDT Deposit Address QR Code" className="w-40 h-40 object-contain" />
+                </div>
+                <p className="text-xs mb-1" style={{ color: '#999' }}>BSC USDT Deposit Address</p>
+              </>
+            ) : (
+              <div className="text-center py-6 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <p className="text-sm font-medium" style={{ color: '#ef4444' }}>Deposit address not configured</p>
+                <p className="text-xs mt-1" style={{ color: '#999' }}>Contact admin to set up deposit wallet.</p>
+              </div>
+            )}
           </div>
 
+          {depositAddress && (
           <div className="flex items-center gap-2 p-3 rounded-xl mb-4" style={{ background: '#fff', border: '1px solid #f0f0f0' }}>
             <span className="flex-1 text-xs font-mono break-all" style={{ color: '#555' }}>{depositAddress}</span>
             <button onClick={handleCopy} className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: copied ? 'rgba(16,185,129,0.15)' : '#f9fafb' }}>
@@ -127,6 +136,7 @@ export default function DepositPage() {
               )}
             </button>
           </div>
+          )}
 
           <div className="mb-4">
             <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Quick Amount</label>

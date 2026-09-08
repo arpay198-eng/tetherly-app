@@ -198,6 +198,11 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
+    const auth = getAuth(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const status = searchParams.get('status');
@@ -208,6 +213,8 @@ export async function GET(request: Request) {
     const withdrawals: any[] = [];
     snap.forEach((docSnap) => {
       const data = docSnap.data();
+      // Non-admin users can only see their own withdrawals.
+      if (!auth.isAdmin && String(data.userId) !== String(auth.id)) return;
       if (userId && data.userId !== userId) return;
       if (status && data.status !== status) return;
       withdrawals.push(data);
