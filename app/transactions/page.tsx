@@ -3,20 +3,37 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
+import { apiGet } from '@/lib/firebaseService';
 import MobileNav from '@/components/layout/MobileNav';
 
 export default function TransactionsPage() {
   const router = useRouter();
-  const { isLoggedIn, transactions } = useStore();
+  const { isLoggedIn, transactions, user } = useStore();
   const [filter, setFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'bonus'>('all');
+  const [ownTransactions, setOwnTransactions] = useState<any[]>([]);
 
   useEffect(() => {
     if (!isLoggedIn) router.replace('/auth/login');
   }, [isLoggedIn, router]);
 
+  // Normal users: fetch only their own transactions from the server.
+  // Admin gets all transactions via FirebaseSync real-time listener.
+  useEffect(() => {
+    if (!isLoggedIn || user?.isAdmin) return;
+    (async () => {
+      try {
+        const data = await apiGet(`/transactions?userId=${user?.id}`);
+        setOwnTransactions(Array.isArray(data) ? data : []);
+      } catch {
+        setOwnTransactions([]);
+      }
+    })();
+  }, [isLoggedIn, user?.id, user?.isAdmin]);
+
   if (!isLoggedIn) return null;
 
-  const filtered = filter === 'all' ? transactions : transactions.filter((tx) => tx.type === filter);
+  const txList = user?.isAdmin ? transactions : ownTransactions;
+  const filtered = filter === 'all' ? txList : txList.filter((tx) => tx.type === filter);
 
   const getIcon = (type: string) => {
     switch (type) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import {
   listenToUsers,
@@ -11,7 +11,6 @@ import {
 } from '@/lib/firebaseService';
 
 export default function FirebaseSync() {
-  const isInitialized = useRef(false);
   const {
     allUsers,
     withdrawalRequests,
@@ -21,6 +20,7 @@ export default function FirebaseSync() {
     setWithdrawalRequests,
     setDepositRequests,
     setTransactions,
+    user,
   } = useStore();
 
   useEffect(() => {
@@ -49,13 +49,15 @@ export default function FirebaseSync() {
       });
     }
 
-    if (isInitialized.current) return;
-    isInitialized.current = true;
+    // Only the admin needs real-time subscriptions to ALL collections.
+    // Normal users get their own data via server-filtered API calls — this
+    // prevents one user's data from leaking into another user's store.
+    if (!user?.isAdmin) return;
 
     // Seed Firestore with initial data if collections are currently empty
     seedFirestoreIfEmpty();
 
-    // Subscribe to real-time changes
+    // Subscribe to real-time changes (admin only)
     const unsubUsers = listenToUsers((users) => {
       if (users && users.length > 0) {
         setAllUsers(users);
@@ -86,7 +88,7 @@ export default function FirebaseSync() {
       unsubDeposits();
       unsubTransactions();
     };
-  }, []);
+  }, [user?.isAdmin]);
 
   return null;
 }
