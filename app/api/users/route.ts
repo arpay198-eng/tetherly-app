@@ -2,6 +2,8 @@
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { getAuth } from '@/lib/auth';
 import { hashPassword } from '@/lib/password';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { randomBytes } from 'node:crypto';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +24,16 @@ async function wouldCreateCycle(userId: string, inviterId: string): Promise<bool
 
 export async function POST(request: Request) {
   try {
+    // Rate limit: 3 registrations per minute per IP.
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const rl = checkRateLimit(`register:${ip}`, 3, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many registration attempts. Try again in ${Math.ceil(rl.retryAfterMs / 1000)}s.` },
+        { status: 429 },
+      );
+    }
+
     const body = await request.json();
     const { name, email, phone, balance, status, joinedDate, password, lastDepositDate, lastDepositAmount, bonusClaimed, depositBalance, referredBy } = body;
     // id is only accepted for admin updates of existing users (see below).
@@ -50,7 +62,8 @@ export async function POST(request: Request) {
     const auth = getAuth(request);
 
     // Self-registration: no client-supplied ID — server generates a unique one.
-    const serverId = String(Math.floor(1000000000 + Math.random() * 9000000000));
+    // Server-generated ID using crypto (not Math.random).
+    const serverId = randomBytes(5).readUInt32BE(0).toString().slice(0, 10);
     const userRef = adminDb.collection('users').doc(serverId);
     const existing = await userRef.get();
 

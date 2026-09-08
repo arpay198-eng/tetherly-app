@@ -2,44 +2,53 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // All application data access now goes through the Next.js server, which
+    // All application data access goes through the Next.js server, which
     // authenticates with the Firebase Admin SDK (service account). Admin SDK
     // calls BYPASS these rules entirely, so server-side verification is immune
-    // to client tampering. The public app ships no write keys: it either reads
-    // via the server APIs or is blocked. Therefore every CLIENT write is
-    // denied here, and client reads of the standard collections are permitted.
+    // to client tampering.
 
-    // 1. Users Collection (server write-only; read public)
+    // Helper: check if request has a valid Firebase Auth token.
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    // 1. Users Collection (server write-only; read requires auth)
     match /users/{userId} {
-      allow read: if true;
+      allow read: if isAuthed();
       allow write: if false;
     }
 
-    // 2. Withdrawals Collection (server write-only; read public)
+    // 2. Withdrawals Collection (server write-only; read requires auth)
     match /withdrawals/{withdrawalId} {
-      allow read: if true;
+      allow read: if isAuthed();
       allow write: if false;
     }
 
-    // 3. Deposits Collection (server write-only; read public)
+    // 3. Deposits Collection (server write-only; read requires auth)
     match /deposits/{depositId} {
-      allow read: if true;
+      allow read: if isAuthed();
       allow write: if false;
     }
 
-    // 4. Transactions Collection (audit ledger; server write-only; read public)
+    // 4. Transactions Collection (audit ledger; server write-only; read requires auth)
     match /transactions/{txId} {
-      allow read: if true;
+      allow read: if isAuthed();
       allow write: if false;
     }
 
-    // 5. Used-hash ledger (server write-only; read public)
+    // 5. Used-hash ledger (server write-only; read requires auth)
     match /used_hashes/{hashId} {
-      allow read: if true;
+      allow read: if isAuthed();
       allow write: if false;
     }
 
-    // 6. Everything else: deny all client access (no catch-all).
+    // 6. Referral codes (server write-only; read requires auth)
+    match /referral_codes/{codeId} {
+      allow read: if isAuthed();
+      allow write: if false;
+    }
+
+    // 7. Everything else: deny all client access.
     match /{document=**} {
       allow read, write: if false;
     }
