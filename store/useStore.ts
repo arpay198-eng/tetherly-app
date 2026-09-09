@@ -61,7 +61,7 @@ export interface WithdrawalRequest {
   amount: number;
   address: string;
   network: 'BEP20';
-  status: 'pending' | 'processing' | 'completed' | 'rejected';
+  status: 'pending' | 'processing' | 'completed' | 'rejected' | 'failed';
   date: string;
 }
 
@@ -73,7 +73,7 @@ export interface DepositRequest {
   amount: number;
   network: 'BEP20';
   txHash?: string;
-  status: 'pending' | 'completed' | 'rejected';
+  status: 'pending' | 'completed' | 'rejected' | 'failed';
   date: string;
   reviewedAt?: string;
   reviewedBy?: string;

@@ -13,24 +13,34 @@ export default function AdminWithdrawalsPage() {
   const [rejectReason, setRejectReason] = useState('')
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null)
 
-  // Fetch withdrawals from server API on mount and every 15s
+  const [authError, setAuthError] = useState(false)
+
+  // Fetch withdrawals from server API on mount and every 3s
   useEffect(() => {
     let alive = true
     const load = async () => {
       const token = getAuthToken()
-      if (!token) return
+      if (!token) {
+        if (alive) setAuthError(true)
+        return
+      }
       try {
         const res = await fetch('/api/withdrawals', {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store'
         })
         if (res.ok && alive) {
+          setAuthError(false)
           const data = await res.json()
           const list = Array.isArray(data) ? data : []
           setWithdrawalRequests(list)
           useStore.getState().setWithdrawalRequests(list)
+        } else if ((res.status === 401 || res.status === 403) && alive) {
+          setAuthError(true)
         }
-      } catch {}
+      } catch {
+        // network retry handled by interval
+      }
     }
     load()
     const interval = setInterval(load, 3000)
@@ -42,7 +52,8 @@ export default function AdminWithdrawalsPage() {
       case 'completed': return '#10b981'
       case 'pending': return '#f59e0b'
       case 'processing': return '#06b6d4'
-      case 'rejected': return '#ef4444'
+      case 'rejected':
+      case 'failed': return '#ef4444'
       default: return '#6b7280'
     }
   }
@@ -59,12 +70,27 @@ export default function AdminWithdrawalsPage() {
     setRejectReason('')
   }
 
-  const filteredRequests = activeTab === 'all'
-    ? withdrawalRequests
-    : withdrawalRequests.filter((r) => r.status === activeTab)
+  const safeRequests = withdrawalRequests || []
+  const pendingRequests = safeRequests.filter((r) => r.status === 'pending')
+  const pendingCount = pendingRequests.length
+  const completedCount = safeRequests.filter((r) => r.status === 'completed').length
+  const rejectedCount = safeRequests.filter((r) => r.status === 'rejected' || r.status === 'failed').length
+  const allCount = safeRequests.length
 
-  const pendingCount = (withdrawalRequests || []).filter((r) => r.status === 'pending').length
-  const pendingTotal = (withdrawalRequests || []).filter((r) => r.status === 'pending').reduce((s, r) => s + r.amount, 0)
+  const filteredRequests = safeRequests.filter((r) => {
+    if (activeTab === 'all') return true
+    if (activeTab === 'rejected') return r.status === 'rejected' || r.status === 'failed'
+    return r.status === activeTab
+  })
+
+  const pendingTotal = pendingRequests.reduce((s, r) => s + r.amount, 0)
+
+  const tabList = [
+    { key: 'all', label: 'All Requests', count: allCount },
+    { key: 'pending', label: 'Pending', count: pendingCount },
+    { key: 'completed', label: 'Completed', count: completedCount },
+    { key: 'rejected', label: 'Rejected', count: rejectedCount },
+  ] as const
 
   return (
     <div className="space-y-6">
@@ -79,7 +105,7 @@ export default function AdminWithdrawalsPage() {
               </span>
             ) : (
               <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                Queue Clear
+                Queue Clear ({allCount} Total)
               </span>
             )}
           </div>
@@ -90,21 +116,47 @@ export default function AdminWithdrawalsPage() {
 
         {/* Filter Tabs */}
         <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl">
-          {(['all', 'pending', 'completed', 'rejected'] as const).map((tab) => (
+          {tabList.map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold capitalize transition-all cursor-pointer ${
-                activeTab === tab
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all cursor-pointer ${
+                activeTab === tab.key
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              {tab === 'all' ? 'All Requests' : tab}
+              <span>{tab.label}</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  tab.key === 'pending' && tab.count > 0
+                    ? 'bg-amber-100 text-amber-800 animate-pulse'
+                    : activeTab === tab.key
+                    ? 'bg-slate-100 text-slate-700'
+                    : 'bg-slate-200/70 text-slate-500'
+                }`}
+              >
+                {tab.count}
+              </span>
             </button>
           ))}
         </div>
       </div>
+
+      {authError && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="text-amber-600 font-bold text-base">⚠️</span>
+            <span>Admin session expired or missing authentication token. Please re-unlock the Master Control panel.</span>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-1 bg-amber-600 text-white rounded-lg font-bold text-xs hover:bg-amber-700 cursor-pointer"
+          >
+            Refresh
+          </button>
+        </div>
+      )}
 
       {/* Desktop Table View */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
@@ -130,7 +182,21 @@ export default function AdminWithdrawalsPage() {
                       </svg>
                     </div>
                     <p className="font-bold text-slate-700">No {activeTab} withdrawal requests</p>
-                    <p className="text-xs text-slate-400 mt-0.5">All payout queues are up to date.</p>
+                    {activeTab === 'pending' && safeRequests.length > 0 ? (
+                      <div className="mt-2">
+                        <p className="text-xs text-slate-500">
+                          Pending queue is completely clear. You have {allCount} total processed withdrawal requests.
+                        </p>
+                        <button
+                          onClick={() => setActiveTab('all')}
+                          className="mt-3 px-4 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all cursor-pointer shadow-sm"
+                        >
+                          View All Requests ({allCount})
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 mt-0.5">All payout queues are up to date.</p>
+                    )}
                   </td>
                 </tr>
               ) : (

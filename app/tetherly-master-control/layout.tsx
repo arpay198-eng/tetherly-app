@@ -78,7 +78,8 @@ export default function MasterControlLayout({ children }: { children: React.Reac
       } catch {}
     }
     loadAdminData()
-    return () => { alive = false }
+    const interval = setInterval(loadAdminData, 4000)
+    return () => { alive = false; clearInterval(interval) }
   }, [isUnlocked])
 
   useEffect(() => {
@@ -311,8 +312,8 @@ export default function MasterControlLayout({ children }: { children: React.Reac
           <path d="M2 7V5a2 2 0 012-2h16a2 2 0 012 2v2" />
         </svg>
       ),
-      badge: pendingDeposits.length > 0 ? `${pendingDeposits.length} Pending` : null,
-      badgeColor: 'amber',
+      badge: pendingDeposits.length > 0 ? `${pendingDeposits.length} Pending` : `${depositRequests.length}`,
+      badgeColor: pendingDeposits.length > 0 ? 'amber' : 'slate',
     },
     {
       name: 'Withdrawals Queue',
@@ -323,8 +324,8 @@ export default function MasterControlLayout({ children }: { children: React.Reac
           <path d="M2 17v2a2 2 0 002 2h16a2 2 0 002-2v-2" />
         </svg>
       ),
-      badge: pendingWithdrawals.length > 0 ? `${pendingWithdrawals.length} Pending` : null,
-      badgeColor: 'amber',
+      badge: pendingWithdrawals.length > 0 ? `${pendingWithdrawals.length} Pending` : `${withdrawalRequests.length}`,
+      badgeColor: pendingWithdrawals.length > 0 ? 'amber' : 'slate',
     },
     {
       name: 'Notifications',
@@ -663,6 +664,8 @@ export default function MasterControlLayout({ children }: { children: React.Reac
                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse'
                             : item.badgeColor === 'blue'
                             ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            : item.badgeColor === 'slate'
+                            ? 'bg-slate-800/90 text-slate-400 border border-slate-700/60'
                             : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                         }`}
                       >
@@ -799,7 +802,11 @@ export default function MasterControlLayout({ children }: { children: React.Reac
                       <span>{item.name}</span>
                     </div>
                     {item.badge && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                        item.badgeColor === 'amber'
+                          ? 'bg-amber-500/20 text-amber-400'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700/60'
+                      }`}>
                         {item.badge}
                       </span>
                     )}

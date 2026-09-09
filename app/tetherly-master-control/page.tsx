@@ -13,13 +13,17 @@ export default function MasterControlPage() {
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([])
   const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [authError, setAuthError] = useState(false)
 
-  // Fetch all data from server API on mount and every 15s
+  // Fetch all data from server API on mount and every 3s
   useEffect(() => {
     let alive = true
     const load = async () => {
       const token = getAuthToken()
-      if (!token) return
+      if (!token) {
+        if (alive) setAuthError(true)
+        return
+      }
       const headers = { Authorization: `Bearer ${token}` }
       try {
         const [uRes, dRes, wRes, tRes] = await Promise.all([
@@ -28,6 +32,12 @@ export default function MasterControlPage() {
           fetch('/api/withdrawals', { headers, cache: 'no-store' }),
           fetch('/api/transactions', { headers, cache: 'no-store' }),
         ])
+        if (uRes.status === 401 || uRes.status === 403 || dRes.status === 401 || dRes.status === 403) {
+          if (alive) setAuthError(true)
+          return
+        }
+        if (alive) setAuthError(false)
+
         if (uRes.ok && alive) {
           const u = await uRes.json();
           const list = Array.isArray(u) ? u : [];
@@ -52,7 +62,9 @@ export default function MasterControlPage() {
           setTransactions(list);
           useStore.getState().setTransactions(list);
         }
-      } catch {}
+      } catch {
+        // network retry handled by interval
+      }
     }
     load()
     const interval = setInterval(load, 3000)
@@ -111,6 +123,23 @@ export default function MasterControlPage() {
   // Platform Vault Reserves
   const platformReserves = 150000 + totalDeposits - completedPayouts
 
+  // De-duplicate transactions against explicit deposit requests & withdrawal requests
+  const existingDepHashes = new Set(safeDeposits.map((d) => (d.txHash || '').toLowerCase()).filter(Boolean))
+  const existingDepIds = new Set(safeDeposits.map((d) => d.id))
+  const existingWdIds = new Set(safeWithdrawals.map((w) => w.id))
+
+  const uniqueTransactions = safeTransactions.filter((t) => {
+    if (t.type === 'deposit') {
+      if (t.hash && existingDepHashes.has(t.hash.toLowerCase())) return false
+      if (t.id && existingDepIds.has(t.id.replace(/^tx_/, ''))) return false
+    }
+    if (t.type === 'withdrawal') {
+      if (t.id && existingWdIds.has(t.id.replace(/^tx_/, ''))) return false
+      if (t.hash && existingWdIds.has(t.hash)) return false
+    }
+    return true
+  })
+
   // Combined ledger items
   const ledgerItems = [
     ...safeWithdrawals.map((w) => ({
@@ -120,12 +149,24 @@ export default function MasterControlPage() {
       label: `Withdrawal Request (${w.network})`,
       detail: w.address,
       amount: -w.amount,
-      status: w.status,
+      status: w.status === 'failed' ? 'rejected' : w.status,
       date: w.date,
       isWithdrawal: true,
       raw: w,
     })),
-    ...safeTransactions.map((t) => ({
+    ...safeDeposits.map((d) => ({
+      id: d.id,
+      type: 'deposit',
+      network: d.network || 'BEP20',
+      label: `Deposit Request (${d.network || 'BEP20'})`,
+      detail: d.txHash || d.id,
+      amount: d.amount,
+      status: d.status === 'failed' ? 'rejected' : d.status,
+      date: d.date,
+      isWithdrawal: false,
+      raw: d,
+    })),
+    ...uniqueTransactions.map((t) => ({
       id: t.id,
       type: t.type,
       network: t.network || 'BSC',
@@ -251,6 +292,54 @@ export default function MasterControlPage() {
           </Link>
         </div>
       </div>
+
+      {authError && (
+        <div className="rounded-2xl p-4 px-5 bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="text-amber-600 font-bold text-base">⚠️</span>
+            <span>Admin session expired or missing authentication token. Please re-unlock the Master Control panel.</span>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-1 bg-amber-600 text-white rounded-lg font-bold text-xs hover:bg-amber-700 cursor-pointer"
+          >
+            Refresh
+          </button>
+        </div>
+      )}
+
+      {/* Reassuring Queue Status Bar when queue is clear */}
+      {pendingDeposits.length === 0 && pendingWithdrawals.length === 0 && (
+        <div className="rounded-2xl p-4 px-5 bg-white border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">
+              ✓
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-800">
+                All Verification Queues are Up-To-Date
+              </p>
+              <p className="text-[11px] text-slate-400">
+                0 pending deposits &bull; 0 pending withdrawals &bull; {safeDeposits.length} deposits recorded &bull; {safeWithdrawals.length} withdrawals recorded
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/tetherly-master-control/deposits"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors"
+            >
+              All Deposits ({safeDeposits.length})
+            </Link>
+            <Link
+              href="/tetherly-master-control/withdrawals"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors"
+            >
+              All Withdrawals ({safeWithdrawals.length})
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Dynamic Pending Deposits Alert Banner */}
       {pendingDeposits.length > 0 && (
@@ -602,6 +691,13 @@ export default function MasterControlPage() {
                               className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-sm"
                             >
                               {quickApprovedId === item.id ? 'Approved' : 'Approve'}
+                            </button>
+                          ) : item.type === 'deposit' && item.status === 'pending' ? (
+                            <button
+                              onClick={() => approveDeposit(item.id)}
+                              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all active:scale-95 cursor-pointer shadow-sm"
+                            >
+                              Approve
                             </button>
                           ) : (
                             <span className="text-[11px] text-slate-400 font-medium">Settled</span>
