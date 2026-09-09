@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useStore, DepositRequest } from '@/store/useStore'
+import { getAuthToken } from '@/lib/firebaseService'
 
 export default function AdminDepositsPage() {
   const { depositRequests, approveDeposit, rejectDeposit } = useStore()
@@ -19,7 +20,10 @@ export default function AdminDepositsPage() {
     setVerifying(true)
     setVerifyMsg(null)
     try {
-      const res = await fetch('/api/auto-verify', { cache: 'no-store' })
+      const res = await fetch('/api/auto-verify', {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${getAuthToken()}` }
+      })
       const data = await res.json()
       if (data.error) {
         setVerifyMsg({ type: 'err', text: data.error })
