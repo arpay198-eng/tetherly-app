@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import FirebaseSync from '@/components/FirebaseSync'
+import AIChatWidget from '@/components/ai/AIChatWidget'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body style={{margin:0, padding:0}}>
         <FirebaseSync />
+        <AIChatWidget />
         <div id="app" className="mx-auto">{children}</div>
       </body>
     </html>

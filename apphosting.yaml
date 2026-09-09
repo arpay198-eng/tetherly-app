@@ -15,6 +15,9 @@ env:
   # JWT signing secret — must be stable across restarts.
   - variable: AUTH_SECRET
     value: "aafa279af673711330bdc607f32fe9341c33ee336b370b7e86e46f8b489dd000"
+  # DeepSeek AI (free tier)
+  - variable: DEEPSEEK_API_KEY
+    secret: DEEPSEEK_API_KEY
   # Deposit wallet address — needed at build time for NEXT_PUBLIC exposure.
   - variable: NEXT_PUBLIC_DEPOSIT_WALLET_BEP20
     value: "0x81EBa2Cb09a9e65225E7246D561038064Ff9be39"
