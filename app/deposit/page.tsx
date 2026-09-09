@@ -43,7 +43,7 @@ export default function DepositPage() {
 
   const BSC_TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
 
-  const handleDeposit = () => {
+  const handleDeposit = async () => {
     const val = parseFloat(amount);
     if (!val || val <= 0) {
       setVerifyState('error');
@@ -64,7 +64,7 @@ export default function DepositPage() {
     }
 
     try {
-      const depositReq = deposit(val, network, trimmedHash);
+      const depositReq = await deposit(val, network, trimmedHash);
       if (depositReq) {
         setVerifyState('verified');
         setVerifyMsg(`Deposit request of ${val} USDT submitted! Your request has been queued for verification.`);
@@ -72,7 +72,7 @@ export default function DepositPage() {
         setTxHash('');
       } else {
         setVerifyState('error');
-        setVerifyMsg('Could not submit deposit. Please check your account login status and try again.');
+        setVerifyMsg('Server rejected the deposit. Please re-login and try again. If it persists, contact support.');
       }
     } catch (err: any) {
       setVerifyState('error');

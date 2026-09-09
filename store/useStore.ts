@@ -118,7 +118,7 @@ export interface AppState {
   login: (email: string, password: string) => Promise<boolean>;
   register: (name: string, email: string, phone: string, password: string, referralInput?: string) => Promise<boolean>;
   logout: () => void;
-  deposit: (amount: number, network: 'BEP20', txHash?: string) => DepositRequest | null;
+  deposit: (amount: number, network: 'BEP20', txHash?: string) => Promise<DepositRequest | null>;
   approveDeposit: (id: string, hash?: string) => void;
   rejectDeposit: (id: string, reason?: string) => void;
   withdraw: (amount: number, address: string, network: 'BEP20', confirmPassword?: string) => Promise<boolean>;
@@ -308,17 +308,35 @@ export const useStore = create<AppState>()(
     });
   },
 
-  deposit: (amount: number, network: 'BEP20', txHash?: string): DepositRequest | null => {
+  deposit: async (amount: number, network: 'BEP20', txHash?: string): Promise<DepositRequest | null> => {
     const { user } = get();
     if (!user || amount <= 0) return null;
 
     const hash = txHash?.trim();
     if (!hash) return null;
 
-    const depId = `dep_${Date.now()}`;
+    // Server-verified: POST to /api/deposits FIRST. Only update local state on success.
+    let serverId: string;
+    try {
+      const res = await apiPost('/deposits', {
+        userId: user.id,
+        userName: user.name || '',
+        userEmail: user.email || '',
+        amount,
+        network,
+        txHash: hash,
+        status: 'pending',
+        date: new Date().toISOString(),
+      });
+      serverId = res.id;
+      if (!serverId) return null;
+    } catch (err: any) {
+      console.error('Deposit submit failed:', err?.message);
+      return null;
+    }
 
     const req: DepositRequest = {
-      id: depId,
+      id: serverId,
       userId: user.id,
       userName: user.name,
       userEmail: user.email,
@@ -330,7 +348,7 @@ export const useStore = create<AppState>()(
     };
 
     const tx: Transaction = {
-      id: `tx_${depId}`,
+      id: `tx_${serverId}`,
       type: 'deposit',
       amount,
       network,
@@ -344,7 +362,7 @@ export const useStore = create<AppState>()(
       transactions: [tx, ...get().transactions],
       notifications: [
         {
-          id: `notif_${depId}`,
+          id: `notif_${serverId}`,
           title: 'Deposit Submitted',
           message: `Your deposit of ${amount} USDT (${network}) has been submitted for verification.`,
           read: false,
@@ -355,7 +373,6 @@ export const useStore = create<AppState>()(
       ],
     });
 
-    syncDepositToFirestore(req);
     syncTransactionToFirestore(tx);
     return req;
   },

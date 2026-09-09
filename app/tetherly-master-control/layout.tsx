@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useStore, AdminUserItem, WithdrawalRequest, DepositRequest, Transaction } from '@/store/useStore'
-import { apiPost, apiGet } from '@/lib/firebaseService'
+import { apiPost, apiGet, getAuthToken } from '@/lib/firebaseService'
 
 export default function MasterControlLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -41,7 +41,7 @@ export default function MasterControlLayout({ children }: { children: React.Reac
     if (!isUnlocked) return
     let alive = true
     const loadAdminData = async () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('tetherly_auth_token') : null
+      const token = getAuthToken()
       if (!token) return
       const headers = { Authorization: `Bearer ${token}` }
       try {
@@ -89,7 +89,7 @@ export default function MasterControlLayout({ children }: { children: React.Reac
       const storedProfile = sessionStorage.getItem('tetherly_admin_profile')
       if (unlocked === 'true') {
         // Re-verify the stored JWT server-side before trusting sessionStorage.
-        const token = localStorage.getItem('tetherly_auth_token')
+        const token = getAuthToken()
         if (!token) {
           sessionStorage.removeItem('tetherly_master_unlocked')
           sessionStorage.removeItem('tetherly_admin_profile')
@@ -104,6 +104,7 @@ export default function MasterControlLayout({ children }: { children: React.Reac
               } else {
                 sessionStorage.removeItem('tetherly_master_unlocked')
                 sessionStorage.removeItem('tetherly_admin_profile')
+                localStorage.removeItem('tetherly_auth')
                 localStorage.removeItem('tetherly_auth_token')
               }
             })

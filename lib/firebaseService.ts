@@ -11,10 +11,11 @@ import { AdminUserItem, Transaction, WithdrawalRequest, DepositRequest } from '@
 const API_BASE = '/api';
 
 const TOKEN_KEY = 'tetherly_auth';
+const LEGACY_TOKEN_KEY = 'tetherly_auth_token';
 
 export function getAuthToken(): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
   } catch {
     return null;
   }
@@ -22,8 +23,13 @@ export function getAuthToken(): string | null {
 
 export function setAuthToken(token: string | null) {
   try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(LEGACY_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+    }
   } catch {
     // ignore storage failures
   }
