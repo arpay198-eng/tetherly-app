@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { triggerAutoVerify } from '@/lib/autoVerifyScheduler';
 import { finalizeDeposit } from '@/lib/autoVerifyCore';
@@ -95,7 +95,34 @@ export async function POST(request: Request) {
       }
 
       // status === 'rejected'
-      await depositRef.set({ status: 'rejected', rejectReason: body.rejectReason || 'Rejected by admin' }, { merge: true });
+      const reason = body.rejectReason || 'Rejected by admin';
+      await depositRef.set({
+        status: 'rejected',
+        rejectReason: reason,
+        reviewedAt: new Date().toISOString(),
+      }, { merge: true });
+
+      // Atomically update matching transactions from pending to failed
+      if (current.txHash) {
+        const txSnap = await adminDb.collection('transactions')
+          .where('hash', '==', current.txHash)
+          .get();
+        if (!txSnap.empty) {
+          const batch = adminDb.batch();
+          txSnap.forEach((doc) => {
+            batch.update(doc.ref, { status: 'failed', rejectReason: reason });
+          });
+          await batch.commit();
+        }
+      }
+
+      await pushNotification(
+        String(current.userId),
+        'Deposit Rejected',
+        `Your deposit of ${Number(current.amount).toFixed(2)} USDT was rejected: ${reason}.`,
+        'warning'
+      );
+
       return NextResponse.json({ success: true, id: clientId, status: 'rejected' });
     }
 

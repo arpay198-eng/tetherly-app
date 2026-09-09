@@ -7,12 +7,12 @@ import MobileNav from '@/components/layout/MobileNav';
 
 export default function DepositPage() {
   const router = useRouter();
-  const { isLoggedIn, deposit } = useStore();
+  const { isLoggedIn, deposit, refreshUser } = useStore();
   const rawTx = useStore((s) => s.transactions) || [];
   const network: 'BEP20' = 'BEP20';
   const [amount, setAmount] = useState('');
   const [txHash, setTxHash] = useState('');
-  const [filterTab, setFilterTab] = useState<'all' | 'completed' | 'pending'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
   const [copied, setCopied] = useState(false);
 
   // Status States
@@ -21,7 +21,8 @@ export default function DepositPage() {
 
   useEffect(() => {
     if (!isLoggedIn) router.replace('/auth/login');
-  }, [isLoggedIn, router]);
+    void refreshUser();
+  }, [isLoggedIn, router, refreshUser]);
 
   if (!isLoggedIn) return null;
 
@@ -254,7 +255,14 @@ export default function DepositPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold tabular-nums" style={{ color: '#10b981' }}>+${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-                    <p className="text-[10px] capitalize" style={{ color: tx.status === 'completed' ? '#10b981' : '#f59e0b' }}>{tx.status}</p>
+                    <p
+                      className="text-[10px] font-bold capitalize"
+                      style={{
+                        color: tx.status === 'completed' ? '#10b981' : tx.status === 'failed' ? '#ef4444' : '#f59e0b',
+                      }}
+                    >
+                      {tx.status === 'failed' ? 'Rejected' : tx.status}
+                    </p>
                   </div>
                 </div>
               ))}

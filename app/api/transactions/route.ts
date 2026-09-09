@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { getAuth } from '@/lib/auth';
 
@@ -40,9 +40,21 @@ export async function POST(request: Request) {
     const txUserId = auth.isAdmin ? (body.userId || auth.id) : auth.id;
 
     const adminDb = getAdminDb();
-    // Server-generated ID — ignore any client-supplied id.
-    const txRef = adminDb.collection('transactions').doc();
-    const id = txRef.id;
+    let txRef = adminDb.collection('transactions').doc();
+    let id = txRef.id;
+
+    if (hash) {
+      const existingSnap = await adminDb.collection('transactions')
+        .where('userId', '==', String(txUserId))
+        .where('hash', '==', String(hash))
+        .limit(1)
+        .get();
+      if (!existingSnap.empty) {
+        txRef = existingSnap.docs[0].ref;
+        id = existingSnap.docs[0].id;
+      }
+    }
+
     const data: Record<string, unknown> = {
       id,
       userId: txUserId,
@@ -53,7 +65,7 @@ export async function POST(request: Request) {
       date: date || new Date().toISOString(),
     };
     if (hash) data.hash = hash;
-    await txRef.set(data);
+    await txRef.set(data, { merge: true });
 
     return NextResponse.json({ success: true, id });
   } catch (error) {
