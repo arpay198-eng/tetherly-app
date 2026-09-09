@@ -34,7 +34,7 @@ export default function AdminDepositsPage() {
       } catch {}
     }
     load()
-    const interval = setInterval(load, 15000)
+    const interval = setInterval(load, 3000)
     return () => { alive = false; clearInterval(interval) }
   }, [])
 
