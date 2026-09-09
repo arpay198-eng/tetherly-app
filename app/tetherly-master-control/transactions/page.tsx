@@ -1,13 +1,36 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore } from '@/store/useStore'
+import { getAuthToken } from '@/lib/firebaseService'
 
 export default function AdminTransactionsPage() {
   const { transactions } = useStore()
   const [filter, setFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'bonus'>('all')
   const [copiedHash, setCopiedHash] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const token = getAuthToken()
+      if (!token) return
+      try {
+        const res = await fetch('/api/transactions', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store'
+        })
+        if (res.ok && alive) {
+          const data = await res.json()
+          const list = Array.isArray(data) ? data : []
+          useStore.getState().setTransactions(list)
+        }
+      } catch {}
+    }
+    load()
+    const interval = setInterval(load, 3000)
+    return () => { alive = false; clearInterval(interval) }
+  }, [])
 
   const handleCopy = (hash: string) => {
     navigator.clipboard.writeText(hash)

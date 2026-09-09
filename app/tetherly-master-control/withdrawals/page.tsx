@@ -26,7 +26,9 @@ export default function AdminWithdrawalsPage() {
         })
         if (res.ok && alive) {
           const data = await res.json()
-          setWithdrawalRequests(Array.isArray(data) ? data : [])
+          const list = Array.isArray(data) ? data : []
+          setWithdrawalRequests(list)
+          useStore.getState().setWithdrawalRequests(list)
         }
       } catch {}
     }

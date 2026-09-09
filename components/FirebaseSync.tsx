@@ -21,6 +21,7 @@ export default function FirebaseSync() {
     setDepositRequests,
     setTransactions,
     user,
+    refreshUser,
   } = useStore();
 
   useEffect(() => {
@@ -89,6 +90,27 @@ export default function FirebaseSync() {
       unsubTransactions();
     };
   }, [user?.isAdmin]);
+
+  // Live Server Polling for Regular Users:
+  // Keeps normal users' balance, status, notifications, and transactions up to date
+  // from the server every 5s without exposing full Firestore collections to client.
+  useEffect(() => {
+    if (!user || user.isAdmin) return;
+    let alive = true;
+
+    const sync = async () => {
+      if (!alive) return;
+      await refreshUser();
+    };
+
+    void sync();
+    const interval = setInterval(sync, 5000);
+
+    return () => {
+      alive = false;
+      clearInterval(interval);
+    };
+  }, [user?.id, user?.isAdmin, refreshUser]);
 
   return null;
 }

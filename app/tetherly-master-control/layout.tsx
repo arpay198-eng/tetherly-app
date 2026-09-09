@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useStore, AdminUserItem, WithdrawalRequest, DepositRequest, Transaction } from '@/store/useStore'
-import { apiPost, apiGet, getAuthToken } from '@/lib/firebaseService'
+import { apiPost, apiGet, getAuthToken, setAuthToken } from '@/lib/firebaseService'
 
 export default function MasterControlLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -51,10 +51,30 @@ export default function MasterControlLayout({ children }: { children: React.Reac
           fetch('/api/withdrawals', { headers, cache: 'no-store' }),
           fetch('/api/transactions', { headers, cache: 'no-store' }),
         ])
-        if (uRes.ok && alive) { const u = await uRes.json(); setAllUsers(Array.isArray(u) ? u : []) }
-        if (dRes.ok && alive) { const d = await dRes.json(); setDepositRequests(Array.isArray(d) ? d : []) }
-        if (wRes.ok && alive) { const w = await wRes.json(); setWithdrawalRequests(Array.isArray(w) ? w : []) }
-        if (tRes.ok && alive) { const t = await tRes.json(); setTransactions(Array.isArray(t) ? t : []) }
+        if (uRes.ok && alive) {
+          const u = await uRes.json();
+          const list = Array.isArray(u) ? u : [];
+          setAllUsers(list);
+          useStore.getState().setAllUsers(list);
+        }
+        if (dRes.ok && alive) {
+          const d = await dRes.json();
+          const list = Array.isArray(d) ? d : [];
+          setDepositRequests(list);
+          useStore.getState().setDepositRequests(list);
+        }
+        if (wRes.ok && alive) {
+          const w = await wRes.json();
+          const list = Array.isArray(w) ? w : [];
+          setWithdrawalRequests(list);
+          useStore.getState().setWithdrawalRequests(list);
+        }
+        if (tRes.ok && alive) {
+          const t = await tRes.json();
+          const list = Array.isArray(t) ? t : [];
+          setTransactions(list);
+          useStore.getState().setTransactions(list);
+        }
       } catch {}
     }
     loadAdminData()
@@ -238,6 +258,7 @@ export default function MasterControlLayout({ children }: { children: React.Reac
         email: foundUser.email || 'rohim.badsha198@gmail.com',
       }
       setAdminProfile(profile)
+      setAuthToken(res.token)
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('tetherly_master_unlocked', 'true')
         sessionStorage.setItem('tetherly_admin_profile', JSON.stringify(profile))
@@ -254,6 +275,7 @@ export default function MasterControlLayout({ children }: { children: React.Reac
   }
 
   const handleLock = () => {
+    setAuthToken(null)
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('tetherly_master_unlocked')
       sessionStorage.removeItem('tetherly_admin_profile')

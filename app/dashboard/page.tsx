@@ -9,7 +9,7 @@ import MobileNav from '@/components/layout/MobileNav';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { isLoggedIn, wallet, user, lastDepositDate, lastDepositAmount, bonusClaimed, transactions, claimBonus, notifications, loadNotifications } = useStore();
+  const { isLoggedIn, wallet, user, lastDepositDate, lastDepositAmount, bonusClaimed, transactions, claimBonus, notifications, loadNotifications, refreshUser } = useStore();
   const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0 });
   const [serverTx, setServerTx] = useState<any[]>([]);
 
@@ -35,14 +35,9 @@ export default function DashboardPage() {
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     void loadNotifications();
-    // For non-admin users, fetch transactions from server (store is empty).
-    if (user && !user.isAdmin && transactions.length === 0) {
-      apiGet(`/transactions?userId=${user.id}`).then((data) => {
-        if (Array.isArray(data)) setServerTx(data);
-      }).catch(() => {});
-    }
+    void refreshUser();
     return () => clearInterval(interval);
-  }, [isLoggedIn, router, getRemaining, loadNotifications, user, transactions.length]);
+  }, [isLoggedIn, router, getRemaining, loadNotifications, refreshUser]);
 
   if (!isLoggedIn) return null;
 

@@ -29,7 +29,9 @@ export default function AdminDepositsPage() {
         })
         if (res.ok && alive) {
           const data = await res.json()
-          setDepositRequests(Array.isArray(data) ? data : [])
+          const list = Array.isArray(data) ? data : []
+          setDepositRequests(list)
+          useStore.getState().setDepositRequests(list)
         }
       } catch {}
     }

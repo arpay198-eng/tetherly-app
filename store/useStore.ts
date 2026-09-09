@@ -17,6 +17,7 @@ export interface User {
   phone: string;
   isAdmin: boolean;
   kycStatus: 'none' | 'pending' | 'verified';
+  status?: 'active' | 'blocked';
   referralCode: string;
   referredBy?: string | null;
   referredByName?: string | null;
@@ -126,6 +127,7 @@ export interface AppState {
   markNotificationRead: (id: string) => void;
   markAllRead: () => void;
   loadNotifications: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   addTransaction: (tx: Omit<Transaction, 'id' | 'date'>) => void;
   addNotification: (n: Omit<Notification, 'id' | 'date' | 'read'>) => void;
   approveWithdrawal: (id: string, hash?: string) => void;
@@ -506,6 +508,49 @@ export const useStore = create<AppState>()(
       if (Array.isArray(list)) set({ notifications: list });
     } catch (e) {
       console.warn('loadNotifications failed:', e);
+    }
+  },
+
+  refreshUser: async () => {
+    const current = get().user;
+    if (!current) return;
+    try {
+      const data = await apiGet(`/users?id=${current.id}`);
+      if (data && data.id) {
+        if (data.status === 'blocked') {
+          get().logout();
+          return;
+        }
+        set((state) => ({
+          user: state.user
+            ? {
+                ...state.user,
+                name: data.name ?? state.user.name,
+                email: data.email ?? state.user.email,
+                phone: data.phone ?? state.user.phone,
+                status: data.status ?? state.user.status,
+                referralCount: data.referralCount ?? state.user.referralCount,
+                referralEarned: data.referralEarned ?? state.user.referralEarned,
+                referralEarnedLevel2: data.referralEarnedLevel2 ?? state.user.referralEarnedLevel2,
+              }
+            : null,
+          wallet: {
+            balance: Number(data.balance ?? state.wallet.balance),
+            depositBalance: Number(data.depositBalance ?? data.balance ?? state.wallet.depositBalance),
+            bonusBalance: Number(data.bonusBalance ?? state.wallet.bonusBalance),
+          },
+          lastDepositDate: data.lastDepositDate ?? state.lastDepositDate,
+          lastDepositAmount: Number(data.lastDepositAmount ?? state.lastDepositAmount),
+          bonusClaimed: data.bonusClaimed ?? state.bonusClaimed,
+        }));
+      }
+
+      const txs = await apiGet(`/transactions?userId=${current.id}`);
+      if (Array.isArray(txs)) {
+        set({ transactions: txs });
+      }
+    } catch {
+      // Silently ignore network or offline errors
     }
   },
 

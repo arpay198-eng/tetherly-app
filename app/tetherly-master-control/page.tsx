@@ -28,10 +28,30 @@ export default function MasterControlPage() {
           fetch('/api/withdrawals', { headers, cache: 'no-store' }),
           fetch('/api/transactions', { headers, cache: 'no-store' }),
         ])
-        if (uRes.ok && alive) { const u = await uRes.json(); setAllUsers(Array.isArray(u) ? u : []) }
-        if (dRes.ok && alive) { const d = await dRes.json(); setDepositRequests(Array.isArray(d) ? d : []) }
-        if (wRes.ok && alive) { const w = await wRes.json(); setWithdrawalRequests(Array.isArray(w) ? w : []) }
-        if (tRes.ok && alive) { const t = await tRes.json(); setTransactions(Array.isArray(t) ? t : []) }
+        if (uRes.ok && alive) {
+          const u = await uRes.json();
+          const list = Array.isArray(u) ? u : [];
+          setAllUsers(list);
+          useStore.getState().setAllUsers(list);
+        }
+        if (dRes.ok && alive) {
+          const d = await dRes.json();
+          const list = Array.isArray(d) ? d : [];
+          setDepositRequests(list);
+          useStore.getState().setDepositRequests(list);
+        }
+        if (wRes.ok && alive) {
+          const w = await wRes.json();
+          const list = Array.isArray(w) ? w : [];
+          setWithdrawalRequests(list);
+          useStore.getState().setWithdrawalRequests(list);
+        }
+        if (tRes.ok && alive) {
+          const t = await tRes.json();
+          const list = Array.isArray(t) ? t : [];
+          setTransactions(list);
+          useStore.getState().setTransactions(list);
+        }
       } catch {}
     }
     load()

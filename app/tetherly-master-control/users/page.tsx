@@ -23,7 +23,9 @@ export default function AdminUsersPage() {
         })
         if (res.ok && alive) {
           const data = await res.json()
-          setAllUsers(Array.isArray(data) ? data : [])
+          const list = Array.isArray(data) ? data : []
+          setAllUsers(list)
+          useStore.getState().setAllUsers(list)
         }
       } catch {}
     }
@@ -80,10 +82,27 @@ export default function AdminUsersPage() {
       })
     }
 
+    const newBal = actionType === 'credit'
+      ? activeUser.balance + amt
+      : Math.max(0, activeUser.balance - amt)
+
+    setAllUsers((prev) =>
+      prev.map((u) => (u.id === activeUser.id ? { ...u, balance: newBal } : u))
+    )
+
     setTimeout(() => {
       setActiveUser(null)
       setFeedbackMsg(null)
     }, 1300)
+  }
+
+  const handleToggleStatus = (userId: string) => {
+    toggleUserStatus(userId)
+    setAllUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId ? { ...u, status: u.status === 'active' ? 'blocked' : 'active' } : u
+      )
+    )
   }
 
   const currentAmt = parseFloat(amountInput) || 0
@@ -226,7 +245,7 @@ export default function AdminUsersPage() {
                           <span className="text-rose-500 font-extrabold">-</span> Debit
                         </button>
                         <button
-                          onClick={() => toggleUserStatus(user.id)}
+                          onClick={() => handleToggleStatus(user.id)}
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                             user.status === 'active'
                               ? 'text-red-700 bg-red-50 hover:bg-red-100 border border-red-200/60'
