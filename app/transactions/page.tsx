@@ -8,31 +8,21 @@ import MobileNav from '@/components/layout/MobileNav';
 
 export default function TransactionsPage() {
   const router = useRouter();
-  const { isLoggedIn, transactions, user } = useStore();
+  const { isLoggedIn, transactions, user, refreshUser } = useStore();
   const [filter, setFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'bonus'>('all');
-  const [ownTransactions, setOwnTransactions] = useState<any[]>([]);
 
   useEffect(() => {
     if (!isLoggedIn) router.replace('/auth/login');
-  }, [isLoggedIn, router]);
-
-  // Normal users: fetch only their own transactions from the server.
-  // Admin gets all transactions via FirebaseSync real-time listener.
-  useEffect(() => {
-    if (!isLoggedIn || user?.isAdmin) return;
-    (async () => {
-      try {
-        const data = await apiGet(`/transactions?userId=${user?.id}`);
-        setOwnTransactions(Array.isArray(data) ? data : []);
-      } catch {
-        setOwnTransactions([]);
-      }
-    })();
-  }, [isLoggedIn, user?.id, user?.isAdmin]);
+    void refreshUser();
+    const interval = setInterval(() => {
+      void refreshUser();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn, router, refreshUser]);
 
   if (!isLoggedIn) return null;
 
-  const txList = user?.isAdmin ? transactions : ownTransactions;
+  const txList = transactions || [];
   const filtered = filter === 'all' ? txList : txList.filter((tx) => tx.type === filter);
 
   const getIcon = (type: string) => {
@@ -147,12 +137,19 @@ export default function TransactionsPage() {
                   <p className="text-[11px]" style={{ color: '#999' }}>
                     {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </p>
+                  {tx.rejectReason && tx.status === 'failed' && (
+                    <p className="text-[10px] text-red-500 truncate" title={tx.rejectReason}>
+                      Reason: {tx.rejectReason}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold tabular-nums" style={{ color: tx.amount >= 0 ? '#10b981' : '#f87171' }}>
                     {tx.amount >= 0 ? '+' : ''}{Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-[10px] capitalize font-medium" style={{ color: getStatusColor(tx.status) }}>{tx.status}</p>
+                  <p className="text-[10px] capitalize font-medium" style={{ color: getStatusColor(tx.status) }}>
+                    {tx.status === 'failed' ? 'Rejected' : tx.status}
+                  </p>
                 </div>
               </div>
             ))}

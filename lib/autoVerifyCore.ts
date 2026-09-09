@@ -6,8 +6,8 @@ const USDT_BEP20_DECIMALS = 18;
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const TOLERANCE_USDT = 0.01;
 const TRANSFER_WINDOW_MS = 72 * 60 * 60 * 1000;
-// Auto-fail pending deposits that never arrived on-chain (10-minute SLA).
-const DEPOSIT_EXPIRE_MS = 10 * 60 * 1000;
+// Auto-fail pending deposits that never arrived on-chain (24-hour window).
+const DEPOSIT_EXPIRE_MS = 24 * 60 * 60 * 1000;
 const BSC_AVG_BLOCK_MS = 3000;
 const CHUNK_BLOCKS = 8000;
 const RPC_RETRIES = 2;
@@ -249,10 +249,15 @@ export async function finalizeDeposit(deposit: DepositDoc, amount: number, txHas
       });
 
       if (txSnap.exists) {
-        await tx.update(txDocRef, { status: 'completed', hash: txHash });
+        await tx.update(txDocRef, {
+          status: 'completed',
+          hash: txHash,
+          userId: String(deposit.userId || ''),
+        });
       } else {
         await tx.set(txDocRef, {
           id: `tx_${deposit.id}`,
+          userId: String(deposit.userId || ''),
           type: 'deposit',
           amount,
           network: deposit.network || 'BEP20',
@@ -417,7 +422,7 @@ export async function runAutoVerify(): Promise<AutoVerifyResult> {
     }
   }
 
-  // Pass C: auto-expire deposits that never actually arrived on-chain (30-minute SLA).
+  // Pass C: auto-expire deposits that never actually arrived on-chain (24-hour window).
   const expireBefore = Date.now() - DEPOSIT_EXPIRE_MS;
   for (const deposit of pending) {
     if (matchedDepositIds.has(deposit.id)) continue;
@@ -426,14 +431,44 @@ export async function runAutoVerify(): Promise<AutoVerifyResult> {
     if (!createdMs || createdMs > expireBefore) continue;
     try {
       const nowIso = new Date().toISOString();
+      const failReason = 'Deposit expired (not received on blockchain within 24 hours)';
       await adminDb.collection('deposits').doc(deposit.id).update({
         status: 'failed',
-        reviewedBy: 'auto-verify (not received in 30m)',
+        rejectReason: failReason,
+        reviewedBy: 'auto-verify (not received in 24h)',
         reviewedAt: nowIso,
         autoFailed: true,
         autoFailedReason: 'not_received',
         autoFailedAt: nowIso,
       });
+
+      // Atomically mark matching transaction record as failed
+      const txDirectRef = adminDb.collection('transactions').doc(`tx_${deposit.id}`);
+      const txDirectSnap = await txDirectRef.get();
+      if (txDirectSnap.exists) {
+        await txDirectRef.update({
+          status: 'failed',
+          rejectReason: failReason,
+        });
+      }
+      if (deposit.txHash) {
+        const txSnap = await adminDb.collection('transactions').where('hash', '==', deposit.txHash).get();
+        if (!txSnap.empty) {
+          const batch = adminDb.batch();
+          txSnap.forEach((d) => batch.update(d.ref, { status: 'failed', rejectReason: failReason }));
+          await batch.commit();
+        }
+      }
+
+      if (deposit.userId) {
+        await pushNotification(
+          String(deposit.userId),
+          'Deposit Expired',
+          `Your deposit of ${Number(deposit.amount).toFixed(2)} USDT expired because payment was not detected on-chain within 24 hours.`,
+          'warning'
+        );
+      }
+
       failed.push({ depositId: deposit.id, amount: Number(deposit.amount), txHash: deposit.txHash || null });
     } catch (e: any) {
       console.warn(`auto-verify: auto-fail failed for ${deposit.id}:`, e?.message);

@@ -20,16 +20,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Single-field orderBy only (auto-indexed), then in-memory userId filter to
-    // avoid a composite index.
-    const snap = await adminDb.collection('notifications').orderBy('date', 'desc').limit(100).get();
-    const list: any[] = [];
-    snap.forEach((d) => {
-      const data = d.data() || {};
-      if (String(data.userId || '') !== String(targetId)) return;
-      list.push(data);
-    });
-    return NextResponse.json(list);
+    let list: any[] = [];
+    if (targetId && targetId !== 'all') {
+      const snap = await adminDb.collection('notifications').where('userId', '==', String(targetId)).get();
+      snap.forEach((d) => {
+        list.push(d.data());
+      });
+      list.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+    } else {
+      const snap = await adminDb.collection('notifications').orderBy('date', 'desc').limit(100).get();
+      snap.forEach((d) => {
+        list.push(d.data());
+      });
+    }
+    return NextResponse.json(list.slice(0, 50));
   } catch (error) {
     console.error('API notifications error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

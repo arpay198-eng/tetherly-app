@@ -10,8 +10,15 @@ export default function NotificationsPage() {
   const { isLoggedIn, notifications, markNotificationRead, markAllRead, loadNotifications } = useStore();
 
   useEffect(() => {
-    if (!isLoggedIn) router.replace('/auth/login');
-    else void loadNotifications();
+    if (!isLoggedIn) {
+      router.replace('/auth/login');
+      return;
+    }
+    void loadNotifications();
+    const interval = setInterval(() => {
+      void loadNotifications();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [isLoggedIn, router, loadNotifications]);
 
   if (!isLoggedIn) return null;

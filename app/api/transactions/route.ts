@@ -87,18 +87,29 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
 
     const adminDb = getAdminDb();
-    const q = adminDb.collection('transactions').orderBy('date', 'desc').limit(100);
-    const snap = await q.get();
+    const targetUserId = !auth.isAdmin ? String(auth.id) : userId ? String(userId) : null;
     const transactions: any[] = [];
-    snap.forEach((docSnap) => {
-      const data = docSnap.data();
-      // Non-admin users can only see their own transactions.
-      if (!auth.isAdmin && String(data.userId) !== String(auth.id)) return;
-      if (userId && data.userId !== userId) return;
-      if (type && data.type !== type) return;
-      if (status && data.status !== status) return;
-      transactions.push(data);
-    });
+
+    if (targetUserId) {
+      const snap = await adminDb.collection('transactions').where('userId', '==', targetUserId).get();
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (type && data.type !== type) return;
+        if (status && data.status !== status) return;
+        transactions.push(data);
+      });
+      transactions.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+    } else {
+      const q = adminDb.collection('transactions').orderBy('date', 'desc').limit(200);
+      const snap = await q.get();
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (type && data.type !== type) return;
+        if (status && data.status !== status) return;
+        transactions.push(data);
+      });
+    }
+
     return NextResponse.json(transactions);
   } catch (error) {
     console.error('API transactions GET error:', error);

@@ -8,7 +8,8 @@ import MobileNav from '@/components/layout/MobileNav';
 
 export default function WithdrawPage() {
   const router = useRouter();
-  const { isLoggedIn, wallet, withdraw, lastDepositDate, lastDepositAmount, user } = useStore();
+  const { isLoggedIn, wallet, withdraw, lastDepositDate, lastDepositAmount, user, refreshUser } = useStore();
+  const rawTx = useStore((s) => s.transactions) || [];
   const [address, setAddress] = useState('');
   const [amount, setAmount] = useState('');
   const network = 'BEP20' as const;
@@ -17,10 +18,16 @@ export default function WithdrawPage() {
   const [loading, setLoading] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
   const [lockMs, setLockMs] = useState(0);
+  const [filterTab, setFilterTab] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
 
   useEffect(() => {
     if (!isLoggedIn) router.replace('/auth/login');
-  }, [isLoggedIn, router]);
+    void refreshUser();
+    const interval = setInterval(() => {
+      void refreshUser();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn, router, refreshUser]);
 
   // 24h deposit lock countdown: withdrawals are blocked while the latest deposit
   // is within its 24h window.
@@ -51,6 +58,9 @@ export default function WithdrawPage() {
   const amountVal = parseFloat(amount) || 0;
   const receiveAmount = amountVal > 0 ? amountVal - fee : 0;
   const isValid = amountVal > 0 && amountVal <= wallet.balance && address.length > 5 && !locked;
+
+  const withdrawalTx = rawTx.filter((t) => t && t.type === 'withdrawal');
+  const filteredTx = filterTab === 'all' ? withdrawalTx : withdrawalTx.filter((t) => t && t.status === filterTab);
 
   const handleMax = () => {
     setAmount(String(wallet.balance > fee ? wallet.balance - fee : 0));
@@ -250,6 +260,66 @@ export default function WithdrawPage() {
             </form>
           </div>
         )}
+
+        {/* Withdrawal History */}
+        <div className="mt-5 rounded-2xl p-4 card-premium">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-semibold" style={{ color: '#1a1a1a' }}>Withdrawal History</span>
+            <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: '#f9fafb' }}>
+              {(['all', 'completed', 'pending', 'failed'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilterTab(f)}
+                  className="px-2.5 py-1 rounded-md text-[10px] font-medium capitalize transition-all"
+                  style={{
+                    background: filterTab === f ? 'rgba(245,158,11,0.15)' : 'transparent',
+                    color: filterTab === f ? '#d97706' : '#999',
+                  }}
+                >
+                  {f === 'failed' ? 'Rejected' : f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filteredTx.length === 0 ? (
+            <p className="text-xs text-center py-6" style={{ color: '#bbb' }}>No withdrawals found</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filteredTx.map((tx) => (
+                <div key={tx.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#fff' }}>
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(245,158,11,0.1)' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: '#1a1a1a' }}>Withdrawal ({tx.network || 'BEP20'})</p>
+                    <p className="text-[10px]" style={{ color: '#999' }}>{new Date(tx.date).toLocaleDateString()}</p>
+                    {tx.rejectReason && tx.status === 'failed' && (
+                      <p className="text-[10px] text-red-500 truncate" title={tx.rejectReason}>
+                        Reason: {tx.rejectReason} (Refunded)
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-semibold tabular-nums" style={{ color: '#ef4444' }}>
+                      -${Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
+                    <p
+                      className="text-[10px] font-bold capitalize"
+                      style={{
+                        color: tx.status === 'completed' ? '#10b981' : tx.status === 'failed' ? '#ef4444' : '#f59e0b',
+                      }}
+                    >
+                      {tx.status === 'failed' ? 'Rejected' : tx.status}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       <MobileNav />
     </div>

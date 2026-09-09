@@ -22,6 +22,10 @@ export default function DepositPage() {
   useEffect(() => {
     if (!isLoggedIn) router.replace('/auth/login');
     void refreshUser();
+    const interval = setInterval(() => {
+      void refreshUser();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [isLoggedIn, router, refreshUser]);
 
   if (!isLoggedIn) return null;
@@ -224,7 +228,7 @@ export default function DepositPage() {
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-semibold" style={{ color: '#1a1a1a' }}>Deposit History</span>
             <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: '#f9fafb' }}>
-              {(['all', 'completed', 'pending'] as const).map((f) => (
+              {(['all', 'completed', 'pending', 'failed'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilterTab(f)}
@@ -234,7 +238,7 @@ export default function DepositPage() {
                     color: filterTab === f ? '#10b981' : '#999',
                   }}
                 >
-                  {f}
+                  {f === 'failed' ? 'Rejected' : f}
                 </button>
               ))}
             </div>
@@ -252,6 +256,11 @@ export default function DepositPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium" style={{ color: '#1a1a1a' }}>Deposit ({tx.network})</p>
                     <p className="text-[10px]" style={{ color: '#999' }}>{new Date(tx.date).toLocaleDateString()}</p>
+                    {tx.rejectReason && tx.status === 'failed' && (
+                      <p className="text-[10px] text-red-500 truncate" title={tx.rejectReason}>
+                        Reason: {tx.rejectReason}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold tabular-nums" style={{ color: '#10b981' }}>+${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>

@@ -25,47 +25,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { userId, userName, userEmail, amount, network, txHash, status, date } = body;
-    // Admin approval sends the existing deposit ID; new pending deposits don't send one.
     const clientId = body.id;
-
-    if (!userId || !amount || !network || !txHash || !status) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    if (typeof amount !== 'number' || amount <= 0) {
-      return NextResponse.json({ error: 'Amount must be a positive number' }, { status: 400 });
-    }
-
-    if (network !== 'BEP20') {
-      return NextResponse.json({ error: 'Only BEP20 network is supported' }, { status: 400 });
-    }
-
-    if (status !== 'pending' && status !== 'completed' && status !== 'rejected') {
-      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
-    }
-
-    if (!txHash || txHash.trim().length === 0) {
-      return NextResponse.json({ error: 'Transaction hash is required' }, { status: 400 });
-    }
-
-    // Validate BSC transaction hash format: 0x + 64 hex characters.
-    const BSC_TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
-    if (!BSC_TX_HASH_RE.test(txHash.trim())) {
-      return NextResponse.json({ error: 'Invalid TxID format. Must be a 66-character BSC hash (0x + 64 hex).' }, { status: 400 });
-    }
-
+    const status = body.status || 'pending';
     const adminDb = getAdminDb();
 
-    if (status === 'pending') {
-      if (!auth.isAdmin && userId !== auth.id) {
-        return NextResponse.json({ error: 'You can only submit deposits for your own account' }, { status: 403 });
-      }
-    } else if (!auth.isAdmin) {
-      return NextResponse.json({ error: 'Only admins can change deposit status' }, { status: 403 });
-    }
-
-    // Admin approval requires the existing deposit ID.
+    // Admin approval/rejection requires the existing deposit ID.
     if (status === 'completed' || status === 'rejected') {
       if (!clientId) {
         return NextResponse.json({ error: 'Deposit id is required for admin approval/rejection' }, { status: 400 });
@@ -84,10 +48,10 @@ export async function POST(request: Request) {
       }
 
       if (status === 'completed') {
-        const hashToUse = txHash || current.txHash || `admin_${Date.now()}`;
+        const hashToUse = body.txHash || current.txHash || `admin_${Date.now()}`;
         const outcome = await finalizeDeposit(
           { ...current, id: String(clientId), txHash: hashToUse },
-          Number(current.amount ?? amount),
+          Number(current.amount ?? body.amount),
           hashToUse,
           'admin'
         );
@@ -103,6 +67,11 @@ export async function POST(request: Request) {
       }, { merge: true });
 
       // Atomically update matching transactions from pending to failed
+      const txDirectRef = adminDb.collection('transactions').doc(`tx_${clientId}`);
+      const txDirectSnap = await txDirectRef.get();
+      if (txDirectSnap.exists) {
+        await txDirectRef.update({ status: 'failed', rejectReason: reason });
+      }
       if (current.txHash) {
         const txSnap = await adminDb.collection('transactions')
           .where('hash', '==', current.txHash)
@@ -126,22 +95,60 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, id: clientId, status: 'rejected' });
     }
 
+    // New pending deposit submission:
+    const { userName, userEmail, date } = body;
+    const amount = Number(body.amount);
+    const network = body.network || 'BEP20';
+    const txHash = String(body.txHash || '').trim();
+    const userId = String(auth.isAdmin ? (body.userId || auth.id) : auth.id);
+
+    if (!amount || amount <= 0) {
+      return NextResponse.json({ error: 'Amount must be a positive number' }, { status: 400 });
+    }
+
+    if (network !== 'BEP20') {
+      return NextResponse.json({ error: 'Only BEP20 network is supported' }, { status: 400 });
+    }
+
+    if (!txHash) {
+      return NextResponse.json({ error: 'Transaction hash is required' }, { status: 400 });
+    }
+
+    // Validate BSC transaction hash format: 0x + 64 hex characters.
+    const BSC_TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
+    if (!BSC_TX_HASH_RE.test(txHash)) {
+      return NextResponse.json({ error: 'Invalid TxID format. Must be a 66-character BSC hash (0x + 64 hex).' }, { status: 400 });
+    }
+
     // New pending deposit: server-generated ID.
     const depositRef = adminDb.collection('deposits').doc();
     const id = depositRef.id;
 
     const data: Record<string, unknown> = {
       id,
-      userId,
+      userId: String(userId),
       userName: userName || '',
       userEmail: userEmail || '',
-      amount,
+      amount: Number(amount),
       network,
       txHash: txHash.trim(),
       status,
       date: date || new Date().toISOString(),
     };
     await depositRef.set(data);
+
+    // Atomically create the pending transaction record on the server
+    const txDocRef = adminDb.collection('transactions').doc(`tx_${id}`);
+    await txDocRef.set({
+      id: `tx_${id}`,
+      userId: String(userId),
+      type: 'deposit',
+      amount: Number(amount),
+      network,
+      status: 'pending',
+      date: data.date,
+      hash: txHash.trim(),
+    });
 
     pushNotification(
       String(userId),
@@ -170,17 +177,26 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
 
     const adminDb = getAdminDb();
-    const q = adminDb.collection('deposits').orderBy('date', 'desc').limit(100);
-    const snap = await q.get();
+    const targetUserId = !auth.isAdmin ? String(auth.id) : userId ? String(userId) : null;
     const deposits: any[] = [];
-    snap.forEach((docSnap) => {
-      const data = docSnap.data();
-      // Non-admins can only read their own deposits.
-      if (!auth.isAdmin && String(data.userId || '') !== String(auth.id) && String(userId || '') !== String(auth.id)) return;
-      if (userId && auth.isAdmin && data.userId !== userId) return;
-      if (status && data.status !== status) return;
-      deposits.push(data);
-    });
+
+    if (targetUserId) {
+      const snap = await adminDb.collection('deposits').where('userId', '==', targetUserId).get();
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (status && data.status !== status) return;
+        deposits.push(data);
+      });
+      deposits.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+    } else {
+      const q = adminDb.collection('deposits').orderBy('date', 'desc').limit(200);
+      const snap = await q.get();
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (status && data.status !== status) return;
+        deposits.push(data);
+      });
+    }
     return NextResponse.json(deposits);
   } catch (error) {
     console.error('API deposits GET error:', error);

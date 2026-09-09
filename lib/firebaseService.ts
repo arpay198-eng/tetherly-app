@@ -97,6 +97,8 @@ export async function syncWithdrawalToFirestore(request: WithdrawalRequest) {
       network: request.network,
       status: request.status,
       date: request.date,
+      rejectReason: (request as any).rejectReason,
+      txHash: (request as any).txHash,
     });
   } catch (error) {
     console.error('Error syncing withdrawal to Firestore:', error);
@@ -115,13 +117,14 @@ export async function syncDepositToFirestore(request: DepositRequest) {
       txHash: request.txHash || '',
       status: request.status,
       date: request.date,
+      rejectReason: (request as any).rejectReason,
     });
   } catch (error) {
     console.error('Error syncing deposit to Firestore:', error);
   }
 }
 
-export async function syncTransactionToFirestore(tx: Transaction & { userId?: string }) {
+export async function syncTransactionToFirestore(tx: Transaction & { userId?: string; rejectReason?: string }) {
   try {
     await apiPost('/transactions', {
       id: tx.id,
@@ -132,6 +135,7 @@ export async function syncTransactionToFirestore(tx: Transaction & { userId?: st
       status: tx.status,
       date: tx.date,
       hash: tx.hash,
+      rejectReason: (tx as any).rejectReason,
     });
   } catch (error) {
     console.error('Error syncing transaction to Firestore:', error);

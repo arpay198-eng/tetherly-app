@@ -42,6 +42,7 @@ export interface Transaction {
   status: 'completed' | 'pending' | 'failed';
   date: string;
   hash?: string;
+  rejectReason?: string;
 }
 
 export interface Notification {
@@ -63,6 +64,10 @@ export interface WithdrawalRequest {
   network: 'BEP20';
   status: 'pending' | 'processing' | 'completed' | 'rejected' | 'failed';
   date: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  rejectReason?: string;
+  txHash?: string;
 }
 
 export interface DepositRequest {
@@ -618,7 +623,12 @@ export const useStore = create<AppState>()(
     // Refund is handled server-side (POST /withdrawals status=rejected atomically
     // returns the deducted amount to the user's balance). Local balance stays as-is.
 
-    const updatedReq: WithdrawalRequest = { ...req, status: 'rejected' };
+    const updatedReq: WithdrawalRequest = {
+      ...req,
+      status: 'rejected',
+      rejectReason: reason || 'Address or KYC verification failed',
+      reviewedAt: new Date().toISOString(),
+    };
 
     set({
       withdrawalRequests: get().withdrawalRequests.map((r) =>
@@ -626,7 +636,7 @@ export const useStore = create<AppState>()(
       ),
       transactions: get().transactions.map((t) =>
         t.id === `tx_${id}` || (t.type === 'withdrawal' && t.status === 'pending' && Math.abs(t.amount) === req.amount)
-          ? { ...t, status: 'failed' }
+          ? { ...t, status: 'failed', rejectReason: updatedReq.rejectReason }
           : t
       ),
       notifications: [
@@ -735,7 +745,7 @@ export const useStore = create<AppState>()(
 
     const updatedRequests = depositRequests.map((r) => (r.id === id ? updatedReq : r));
     const updatedTx = transactions.map((t) =>
-      t.id === `tx_${id}` || t.hash === req.txHash ? { ...t, status: 'failed' as const } : t
+      t.id === `tx_${id}` || t.hash === req.txHash ? { ...t, status: 'failed' as const, rejectReason: updatedReq.rejectReason } : t
     );
 
     set({
