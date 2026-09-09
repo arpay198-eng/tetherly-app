@@ -121,10 +121,11 @@ export async function syncDepositToFirestore(request: DepositRequest) {
   }
 }
 
-export async function syncTransactionToFirestore(tx: Transaction) {
+export async function syncTransactionToFirestore(tx: Transaction & { userId?: string }) {
   try {
     await apiPost('/transactions', {
       id: tx.id,
+      userId: (tx as any).userId,
       type: tx.type,
       amount: tx.amount,
       network: tx.network,
@@ -134,6 +135,19 @@ export async function syncTransactionToFirestore(tx: Transaction) {
     });
   } catch (error) {
     console.error('Error syncing transaction to Firestore:', error);
+  }
+}
+
+export async function syncNotificationToFirestore(
+  userId: string,
+  title: string,
+  message: string,
+  type: 'info' | 'success' | 'warning' = 'info'
+) {
+  try {
+    await apiPost('/notifications', { userId, title, message, type });
+  } catch (error) {
+    console.error('Error syncing notification to Firestore:', error);
   }
 }
 

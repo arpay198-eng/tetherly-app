@@ -5,6 +5,7 @@ import {
   syncWithdrawalToFirestore,
   syncDepositToFirestore,
   syncTransactionToFirestore,
+  syncNotificationToFirestore,
   setAuthToken,
   apiPost,
   apiGet,
@@ -549,6 +550,8 @@ export const useStore = create<AppState>()(
       if (Array.isArray(txs)) {
         set({ transactions: txs });
       }
+
+      await get().loadNotifications();
     } catch {
       // Silently ignore network or offline errors
     }
@@ -779,6 +782,7 @@ export const useStore = create<AppState>()(
     const targetUser = updatedUsers.find((u) => u.id === userId);
     if (targetUser) {
       syncUserToFirestore(targetUser);
+      syncNotificationToFirestore(userId, 'Account Balance Adjusted', `Your account balance was updated to ${newBalance.toLocaleString('en-US')} USDT by platform administrator.`, 'info');
     }
   },
 
@@ -827,7 +831,8 @@ export const useStore = create<AppState>()(
     });
 
     syncUserToFirestore(updatedTarget);
-    syncTransactionToFirestore(tx);
+    syncTransactionToFirestore({ ...tx, userId } as any);
+    syncNotificationToFirestore(userId, 'Account Credited', notif.message, 'success');
   },
 
   debitUser: (userId: string, amount: number, note?: string) => {
@@ -875,7 +880,8 @@ export const useStore = create<AppState>()(
     });
 
     syncUserToFirestore(updatedTarget);
-    syncTransactionToFirestore(tx);
+    syncTransactionToFirestore({ ...tx, userId } as any);
+    syncNotificationToFirestore(userId, 'Account Debited', notif.message, 'warning');
   },
 
   toggleUserStatus: (userId: string) => {
