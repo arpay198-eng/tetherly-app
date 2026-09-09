@@ -1,15 +1,39 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore, WithdrawalRequest } from '@/store/useStore'
+import { getAuthToken } from '@/lib/firebaseService'
 
 export default function AdminWithdrawalsPage() {
-  const { withdrawalRequests, approveWithdrawal, rejectWithdrawal } = useStore()
+  const { approveWithdrawal, rejectWithdrawal } = useStore()
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([])
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'completed' | 'rejected'>('all')
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null)
+
+  // Fetch withdrawals from server API on mount and every 15s
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const token = getAuthToken()
+      if (!token) return
+      try {
+        const res = await fetch('/api/withdrawals', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store'
+        })
+        if (res.ok && alive) {
+          const data = await res.json()
+          setWithdrawalRequests(Array.isArray(data) ? data : [])
+        }
+      } catch {}
+    }
+    load()
+    const interval = setInterval(load, 15000)
+    return () => { alive = false; clearInterval(interval) }
+  }, [])
 
   const getStatusColor = (status: string) => {
     switch (status) {

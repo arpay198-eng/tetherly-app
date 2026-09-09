@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore, DepositRequest } from '@/store/useStore'
 import { getAuthToken } from '@/lib/firebaseService'
 
 export default function AdminDepositsPage() {
-  const { depositRequests, approveDeposit, rejectDeposit } = useStore()
+  const { approveDeposit, rejectDeposit } = useStore()
+  const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([])
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'completed' | 'rejected'>('all')
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -14,6 +15,28 @@ export default function AdminDepositsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [verifyMsg, setVerifyMsg] = useState<{ type: 'ok' | 'err' | 'info'; text: string } | null>(null)
+
+  // Fetch deposits from server API on mount and every 15s
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const token = getAuthToken()
+      if (!token) return
+      try {
+        const res = await fetch('/api/deposits', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store'
+        })
+        if (res.ok && alive) {
+          const data = await res.json()
+          setDepositRequests(Array.isArray(data) ? data : [])
+        }
+      } catch {}
+    }
+    load()
+    const interval = setInterval(load, 15000)
+    return () => { alive = false; clearInterval(interval) }
+  }, [])
 
   const runAutoVerify = async () => {
     if (verifying) return

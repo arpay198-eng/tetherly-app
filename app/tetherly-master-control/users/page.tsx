@@ -1,12 +1,36 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore, AdminUserItem } from '@/store/useStore'
+import { getAuthToken } from '@/lib/firebaseService'
 
 export default function AdminUsersPage() {
-  const { allUsers, creditUser, debitUser, toggleUserStatus } = useStore()
+  const { creditUser, debitUser, toggleUserStatus } = useStore()
+  const [allUsers, setAllUsers] = useState<AdminUserItem[]>([])
   const [search, setSearch] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Fetch users from server API on mount and every 15s
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const token = getAuthToken()
+      if (!token) return
+      try {
+        const res = await fetch('/api/users', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store'
+        })
+        if (res.ok && alive) {
+          const data = await res.json()
+          setAllUsers(Array.isArray(data) ? data : [])
+        }
+      } catch {}
+    }
+    load()
+    const interval = setInterval(load, 15000)
+    return () => { alive = false; clearInterval(interval) }
+  }, [])
 
   // Credit / Debit Modal State
   const [activeUser, setActiveUser] = useState<AdminUserItem | null>(null)

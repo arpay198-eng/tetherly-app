@@ -1,13 +1,43 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useStore, AdminUserItem } from '@/store/useStore'
+import { useStore, AdminUserItem, Transaction, DepositRequest, WithdrawalRequest } from '@/store/useStore'
+import { getAuthToken } from '@/lib/firebaseService'
 
 export default function MasterControlPage() {
   const router = useRouter()
-  const { allUsers, withdrawalRequests, depositRequests, transactions, updateUserBalance, creditUser, debitUser, approveWithdrawal, approveDeposit, toggleUserStatus } = useStore()
+  const { updateUserBalance, creditUser, debitUser, approveWithdrawal, approveDeposit, toggleUserStatus } = useStore()
+  const [allUsers, setAllUsers] = useState<AdminUserItem[]>([])
+  const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([])
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+
+  // Fetch all data from server API on mount and every 15s
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const token = getAuthToken()
+      if (!token) return
+      const headers = { Authorization: `Bearer ${token}` }
+      try {
+        const [uRes, dRes, wRes, tRes] = await Promise.all([
+          fetch('/api/users', { headers, cache: 'no-store' }),
+          fetch('/api/deposits', { headers, cache: 'no-store' }),
+          fetch('/api/withdrawals', { headers, cache: 'no-store' }),
+          fetch('/api/transactions', { headers, cache: 'no-store' }),
+        ])
+        if (uRes.ok && alive) { const u = await uRes.json(); setAllUsers(Array.isArray(u) ? u : []) }
+        if (dRes.ok && alive) { const d = await dRes.json(); setDepositRequests(Array.isArray(d) ? d : []) }
+        if (wRes.ok && alive) { const w = await wRes.json(); setWithdrawalRequests(Array.isArray(w) ? w : []) }
+        if (tRes.ok && alive) { const t = await tRes.json(); setTransactions(Array.isArray(t) ? t : []) }
+      } catch {}
+    }
+    load()
+    const interval = setInterval(load, 15000)
+    return () => { alive = false; clearInterval(interval) }
+  }, [])
 
   // Quick adjust modal state
   const [showQuickCreditModal, setShowQuickCreditModal] = useState(false)
