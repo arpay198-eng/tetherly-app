@@ -3,8 +3,6 @@ import { getAdminDb } from '@/lib/firebaseAdmin';
 import { getAuth } from '@/lib/auth';
 import { pushNotification } from '@/lib/notifications';
 
-export const dynamic = 'force-dynamic';
-
 type TicketStatus = 'open' | 'resolved' | 'closed';
 type Reply = { id: string; from: 'user' | 'admin'; message: string; date: string };
 
@@ -114,7 +112,7 @@ export async function POST(request: Request) {
       const reply = buildReply(message, auth.isAdmin ? 'admin' : 'user');
 
       // A user replying to a resolved/closed ticket reopens it.
-      let nextStatus: TicketStatus = data.status === 'open' ? 'open' : 'open';
+      const nextStatus: TicketStatus = 'open';
 
       const updates: Record<string, unknown> = {
         replies: [...existingReplies, reply],

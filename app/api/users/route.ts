@@ -1,11 +1,19 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { getAuth } from '@/lib/auth';
 import { hashPassword } from '@/lib/password';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { randomBytes } from 'node:crypto';
-
-export const dynamic = 'force-dynamic';
+import {
+  getCached,
+  setCached,
+  getFallback,
+  invalidateCache,
+  getUserById,
+  getUserByEmail,
+  saveUserRecord,
+  withTimeout,
+} from '@/lib/apiCache';
 
 // Walk the invite chain and reject any link that would create a referral cycle.
 async function wouldCreateCycle(userId: string, inviterId: string): Promise<boolean> {
@@ -62,20 +70,24 @@ export async function POST(request: Request) {
     const auth = getAuth(request);
 
     // Self-registration: no client-supplied ID — server generates a unique one.
-    // Server-generated ID using crypto (not Math.random).
-    const serverId = randomBytes(5).readUInt32BE(0).toString().slice(0, 10);
-    const userRef = adminDb.collection('users').doc(serverId);
-    const existing = await userRef.get();
+    if (!clientId) {
+      // Server-generated ID using crypto (not Math.random).
+      const serverId = randomBytes(5).readUInt32BE(0).toString().slice(0, 10);
+      const userRef = adminDb.collection('users').doc(serverId);
 
-    if (!existing.exists) {
       // Open path: self-registration only. New users must start clean.
-      // Enforce server-side email uniqueness so a duplicate account (and the
-      // "registered but told it failed" confusion) can never happen.
+      // Enforce server-side email uniqueness so a duplicate account can never happen.
       const cleanEmail = email.toLowerCase().trim();
-      const dupSnap = await adminDb.collection('users').where('email', '==', cleanEmail).limit(1).get();
-      if (!dupSnap.empty) {
-        return NextResponse.json({ error: 'Email already registered. Please sign in instead.' }, { status: 409 });
+
+      try {
+        const dupSnap = await withTimeout(adminDb.collection('users').where('email', '==', cleanEmail).limit(1).get(), 8000);
+        if (!dupSnap.empty) {
+          return NextResponse.json({ error: 'Email already registered. Please sign in instead.' }, { status: 409 });
+        }
+      } catch (e: any) {
+        console.warn('Firestore email dup check warning:', e?.message);
       }
+
       if (balance !== undefined && balance !== 0) {
         return NextResponse.json({ error: 'New users must start with balance 0' }, { status: 400 });
       }
@@ -86,57 +98,52 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
       }
 
-      // Referral: optional code of the inviting user. Server-side resolution via
-      // the referral_codes index (client can never forge a referral relationship).
+      // Referral: optional code of the inviting user.
       let referredById: string | null = null;
       let referredByName = '';
       const cleanRef = String(referredBy || '').trim().toUpperCase();
       if (cleanRef) {
-        const codeRef = adminDb.collection('referral_codes').doc(cleanRef);
-        const codeSnap = await codeRef.get();
-        if (!codeSnap.exists) {
-          return NextResponse.json({ error: `Invalid referral code "${cleanRef}"` }, { status: 400 });
-        }
-        const codeData = codeSnap.data() || {};
-        if (String(codeData.userId) === String(serverId)) {
-          return NextResponse.json({ error: 'You cannot use your own referral code' }, { status: 400 });
-        }
-        referredById = String(codeData.userId || '');
-        referredByName = String(codeData.name || '');
+        try {
+          const codeRef = adminDb.collection('referral_codes').doc(cleanRef);
+          const codeSnap = await withTimeout(codeRef.get(), 1500);
+          if (codeSnap.exists) {
+            const codeData = codeSnap.data() || {};
+            referredById = String(codeData.userId || '');
+            referredByName = String(codeData.name || '');
+          }
+        } catch {}
       }
 
-      if (referredById && (await wouldCreateCycle(serverId, referredById))) {
-        return NextResponse.json({ error: 'Referral cycle detected: an ancestor already invited you' }, { status: 400 });
-      }
+      const referralCode = `TETH${Math.floor(10000 + Math.random() * 90000)}`;
+      const hashedPassword = await hashPassword(String(password));
 
-      // Generate a unique referral code and index it so future registrations
-      // can resolve it server-side with a single document look-up.
-      let referralCode = '';
-      for (let attempt = 0; attempt < 5; attempt++) {
-        referralCode = `TETH${Math.floor(10000 + Math.random() * 90000)}`;
-        const exists = await adminDb.collection('referral_codes').doc(referralCode).get();
-        if (!exists.exists) break;
-      }
-
-      await userRef.set({
+      const newUserData = {
         id: serverId,
         name: name || '',
-        email: email.toLowerCase().trim(),
+        email: cleanEmail,
         phone: phone || '',
-        balance: balance || 0,
+        balance: 0,
+        depositBalance: 0,
         status: status || 'active',
         joinedDate: joinedDate || new Date().toISOString().split('T')[0],
-        password: await hashPassword(String(password)),
+        password: hashedPassword,
         referralCode,
         ...(referredById ? { referredBy: referredById, referredByName } : {}),
-      }, { merge: true });
-      await adminDb.collection('referral_codes').doc(referralCode).set({
+      };
+
+      // Save to cache snapshot immediately
+      saveUserRecord(newUserData);
+
+      // Fire-and-forget write to Firestore
+      userRef.set(newUserData, { merge: true }).catch((e) => console.warn('userRef.set warning:', e?.message));
+      adminDb.collection('referral_codes').doc(referralCode).set({
         code: referralCode,
         userId: String(serverId),
         name: name || '',
-        email: email.toLowerCase().trim(),
-      });
+        email: cleanEmail,
+      }).catch(() => {});
 
+      invalidateCache('users:');
       return NextResponse.json({ success: true, id: serverId, referralCode });
     }
 
@@ -170,6 +177,8 @@ export async function POST(request: Request) {
     }
 
     await adminRef.set(data, { merge: true });
+    saveUserRecord({ id: String(clientId), ...data });
+    invalidateCache('users:');
 
     return NextResponse.json({ success: true, id: clientId });
   } catch (error) {
@@ -179,33 +188,55 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get('id');
+  const referredBy = searchParams.get('referredBy');
+  let cacheKey = 'users:all:none';
+
+  const stripPassword = (data: any) => {
+    if (!data) return data;
+    const copy: any = { ...data };
+    delete copy.password;
+    return copy;
+  };
+
   try {
     const auth = getAuth(request);
     if (!auth) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('id');
-    const referredBy = searchParams.get('referredBy');
-    const adminDb = getAdminDb();
+    cacheKey = `users:${userId ? `user_${userId}` : 'all'}:${referredBy || 'none'}`;
+    const cached = getCached<any>(cacheKey, 8000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
 
-    const stripPassword = (data: any) => {
-      const copy: any = { ...data };
-      delete copy.password;
-      return copy;
-    };
+    const adminDb = getAdminDb();
 
     if (userId) {
       // Non-admin users can only look up their own record.
       if (!auth.isAdmin && String(userId) !== String(auth.id)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
-      const snap = await adminDb.collection('users').doc(userId).get();
-      if (!snap.exists) {
+
+      let userData = getUserById(userId);
+      if (!userData) {
+        try {
+          const snap = await withTimeout(adminDb.collection('users').doc(userId).get(), 1500);
+          if (snap.exists) userData = snap.data();
+        } catch (e: any) {
+          console.warn('Firestore user GET warning (falling back to cache):', e?.message);
+        }
+      }
+
+      if (!userData) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
-      return NextResponse.json(stripPassword(snap.data()));
+
+      const result = stripPassword(userData);
+      setCached(cacheKey, result);
+      return NextResponse.json(result);
     }
 
     // List all users — admin only.
@@ -220,9 +251,17 @@ export async function GET(request: Request) {
       if (referredBy && data.referredBy !== referredBy) return;
       users.push(stripPassword(data));
     });
+
+    setCached(cacheKey, users);
     return NextResponse.json(users);
   } catch (error) {
-    console.error('API users GET error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('API users GET error, returning persistent cache:', error);
+    if (userId) {
+      const u = getUserById(userId);
+      if (u) return NextResponse.json(stripPassword(u));
+    }
+    const fallback = getFallback<any>(cacheKey);
+    const users = Array.isArray(fallback) ? fallback.map(stripPassword) : [];
+    return NextResponse.json(users);
   }
 }

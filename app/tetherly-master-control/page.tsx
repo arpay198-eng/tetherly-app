@@ -67,7 +67,7 @@ export default function MasterControlPage() {
       }
     }
     load()
-    const interval = setInterval(load, 3000)
+    const interval = setInterval(load, 12000)
     return () => { alive = false; clearInterval(interval) }
   }, [])
 
@@ -245,7 +245,7 @@ export default function MasterControlPage() {
               Live Mainnet
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs font-medium text-slate-500 mt-1">
             Real-time management of platform liquidity, user reserves, and on-chain withdrawal settlements.
           </p>
         </div>
@@ -449,7 +449,7 @@ export default function MasterControlPage() {
           </div>
           <div>
             <h2 className="text-2xl font-black tracking-tight text-white tabular-nums">
-              ${platformReserves.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+              ${platformReserves.toLocaleString('en-US')}{' '}
               <span className="text-xs font-bold text-emerald-400">USDT</span>
             </h2>
             <p className="text-[11px] text-slate-400 mt-1">
@@ -566,7 +566,7 @@ export default function MasterControlPage() {
             <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="text-base font-bold text-slate-900">Live Financial Ledger</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Real-time on-chain deposits, payouts, rewards, and system adjustments</p>
+                <p className="text-xs font-medium text-slate-500 mt-0.5">Real-time on-chain deposits, payouts, rewards, and system adjustments</p>
               </div>
 
               {/* Filter Tabs */}

@@ -8,9 +8,9 @@ const navItems = [
     label: 'Home',
     href: '/dashboard',
     icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-        <polyline points="9 22 9 12 15 12 15 22" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 10.5L12 3L21 10.5V20C21 20.55 20.55 21 20 21H15V15H9V21H4C3.45 21 3 20.55 3 20V10.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M9 15H15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -18,9 +18,12 @@ const navItems = [
     label: 'Deposit',
     href: '/deposit',
     icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 1v22" />
-        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="6" width="18" height="14" rx="3" stroke="currentColor" strokeWidth="1.8"/>
+        <path d="M3 11H21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+        <path d="M12 15V18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+        <path d="M9 16.5H15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+        <circle cx="12" cy="9" r="1.5" fill="currentColor"/>
       </svg>
     ),
   },
@@ -28,8 +31,9 @@ const navItems = [
     label: 'Bonus',
     href: '/bonus',
     icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L14.5 8.5L21.5 9.5L16.5 14L18 21L12 17.5L6 21L7.5 14L2.5 9.5L9.5 8.5L12 2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2"/>
       </svg>
     ),
   },
@@ -37,9 +41,10 @@ const navItems = [
     label: 'Withdraw',
     href: '/withdraw',
     icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <polyline points="19 12 12 19 5 12" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/>
+        <path d="M12 8V16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+        <path d="M8.5 12.5L12 16L15.5 12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
@@ -47,9 +52,9 @@ const navItems = [
     label: 'Profile',
     href: '/settings/profile',
     icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8"/>
+        <path d="M5 20C5 17.24 7.24 15 10 15H14C16.76 15 19 17.24 19 20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -61,11 +66,13 @@ export default function MobileNav() {
   return (
     <nav className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 w-full max-w-[440px] px-4">
       <div
-        className="flex items-center justify-around rounded-2xl px-2 py-2.5"
+        className="flex items-center justify-around rounded-[20px] px-2 py-2"
         style={{
-          background: '#fff',
-          border: '1px solid #f0f0f0',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+          background: 'rgba(255,255,255,0.98)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(0,0,0,0.05)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
         }}
       >
         {navItems.map((item) => {
@@ -74,16 +81,28 @@ export default function MobileNav() {
             <Link
               key={item.href}
               href={item.href}
-              className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all duration-200"
+              className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl transition-all duration-300 relative"
               style={{
-                color: isActive ? '#10b981' : '#999',
-                background: isActive ? 'rgba(16,185,129,0.08)' : 'transparent',
+                color: isActive ? '#10b981' : '#b0b0b0',
               }}
             >
-              <div className="transition-transform duration-200" style={{ transform: isActive ? 'scale(1.1)' : 'scale(1)' }}>
+              <div
+                className="transition-all duration-300"
+                style={{
+                  transform: isActive ? 'scale(1.15) translateY(-2px)' : 'scale(1)',
+                  filter: isActive ? 'drop-shadow(0 3px 6px rgba(16,185,129,0.35))' : 'none',
+                }}
+              >
                 {item.icon}
               </div>
-              <span className="text-[10px] font-medium leading-none">{item.label}</span>
+              <span
+                className="text-[9px] leading-none transition-all duration-300"
+                style={{
+                  fontWeight: isActive ? '700' : '500',
+                }}
+              >
+                {item.label}
+              </span>
             </Link>
           );
         })}

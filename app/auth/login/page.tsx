@@ -86,7 +86,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="flex flex-col gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Email</label>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: '#888' }}>Email</label>
               <input
                 type="email"
                 value={email}
@@ -97,7 +97,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Password</label>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: '#888' }}>Password</label>
               <input
                 type="password"
                 value={password}

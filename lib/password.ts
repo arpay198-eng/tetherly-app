@@ -7,5 +7,14 @@ export async function hashPassword(plain: string): Promise<string> {
 }
 
 export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(plain, hash);
+  if (!plain || !hash) return false;
+  try {
+    const isBcrypt = hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$');
+    if (isBcrypt) {
+      return await bcrypt.compare(plain, hash);
+    }
+    return plain === hash;
+  } catch {
+    return plain === hash;
+  }
 }

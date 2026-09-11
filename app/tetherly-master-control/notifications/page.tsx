@@ -54,7 +54,7 @@ export default function AdminNotificationsPage() {
     if (!target) return
     try {
       const list = await apiGet(`/notifications?userId=${encodeURIComponent(target)}`)
-      setHistory(list || [])
+      setHistory((list || []).sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()))
       setHistoryUid(target)
     } catch {
       setHistory([])

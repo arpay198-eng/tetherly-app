@@ -11,5 +11,20 @@
       "**/node_modules/**"
     ],
     "cleanUrls": true
-  }
+  },
+  "apphosting": [
+    {
+      "backendId": "tetherly-app",
+      "rootDir": ".",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "android",
+        "out"
+      ],
+      "alwaysDeployFromSource": true
+    }
+  ]
 }

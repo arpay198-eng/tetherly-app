@@ -8,6 +8,7 @@ const TOLERANCE_USDT = 0.01;
 const TRANSFER_WINDOW_MS = 72 * 60 * 60 * 1000;
 // Auto-fail pending deposits that never arrived on-chain (24-hour window).
 const DEPOSIT_EXPIRE_MS = 24 * 60 * 60 * 1000;
+const MAX_RETRY_COUNT = 3;
 const BSC_AVG_BLOCK_MS = 3000;
 const CHUNK_BLOCKS = 8000;
 const RPC_RETRIES = 2;
@@ -143,6 +144,8 @@ interface DepositDoc {
   status?: string;
   date?: string;
   autoVerified?: boolean;
+  retryCount?: number;
+  lastRetryAt?: string;
 }
 
 interface VerifyOutcome {
@@ -163,19 +166,13 @@ async function resolveUserRef(deposit: DepositDoc): Promise<{ ref: any; balance:
     }
   }
   if (deposit.userEmail) {
-    const usersSnap = await adminDb.collection('users').limit(1000).get();
-    let foundRef: any | null = null;
-    let bal = 0;
-    let depBal: number | undefined;
-    usersSnap.forEach((s) => {
+    const cleanEmail = String(deposit.userEmail).toLowerCase().trim();
+    const userSnap = await adminDb.collection('users').where('email', '==', cleanEmail).limit(1).get();
+    if (!userSnap.empty) {
+      const s = userSnap.docs[0];
       const d = s.data();
-      if (String(d?.email || '').toLowerCase() === String(deposit.userEmail || '').toLowerCase()) {
-        foundRef = s.ref;
-        bal = Number(d?.balance ?? 0);
-        depBal = d?.depositBalance !== undefined ? Number(d.depositBalance) : undefined;
-      }
-    });
-    if (foundRef) return { ref: foundRef, balance: bal, depositBalance: depBal };
+      return { ref: s.ref, balance: Number(d?.balance ?? 0), depositBalance: d?.depositBalance !== undefined ? Number(d.depositBalance) : undefined };
+    }
   }
   return null;
 }
@@ -200,7 +197,7 @@ export async function finalizeDeposit(deposit: DepositDoc, amount: number, txHas
   const usedRef = adminDb.collection('used_hashes').doc(hashKey);
   const now = new Date().toISOString();
   try {
-    await adminDb.runTransaction(async (tx) => {
+    const txResult = await adminDb.runTransaction(async (tx) => {
       // Firestore requires all reads before any writes.
       const depSnap = await tx.get(depositRef);
       if (!depSnap.exists) throw new Error('deposit_missing');
@@ -211,7 +208,8 @@ export async function finalizeDeposit(deposit: DepositDoc, amount: number, txHas
       const txSnap = await tx.get(txDocRef);
 
       // Same on-chain payment submitted as a second deposit → never credit twice.
-      if (usedSnap.exists) {
+      // SKIP for admin: admin manually approves, doesn't need on-chain duplicate check.
+      if (method !== 'admin' && usedSnap.exists) {
         const first = (usedSnap.data() as any)?.depositId || null;
         await tx.update(depositRef, {
           status: 'failed',
@@ -274,7 +272,13 @@ export async function finalizeDeposit(deposit: DepositDoc, amount: number, txHas
         method,
         creditedAt: now,
       });
+      return { condition: 'credited' as const };
     });
+
+    if ((txResult as any)?.condition === 'hash_already_used') {
+      return { verified: true, credited: false, reason: 'hash_already_used' } as VerifyOutcome;
+    }
+
     // Notify the depositor that their deposit was credited.
     pushNotification(
       String(deposit.userId || ''),
@@ -333,7 +337,7 @@ export async function runAutoVerify(): Promise<AutoVerifyResult> {
   const adminDb = getAdminDb();
 
   // Load pending deposit requests
-  const depositsSnap = await adminDb.collection('deposits').limit(1000).get();
+  const depositsSnap = await adminDb.collection('deposits').where('status', '==', 'pending').limit(100).get();
   const pending: DepositDoc[] = [];
   depositsSnap.forEach((s) => {
     const d = s.data() as DepositDoc;
@@ -372,6 +376,56 @@ export async function runAutoVerify(): Promise<AutoVerifyResult> {
     if (!REAL_HASH_RE.test(txHash)) continue;
     const verifyKey = `r:${txHash.toLowerCase()}`;
     if (usedTransferKeys.has(verifyKey)) continue;
+
+    // Retry tracking: increment retry count and check limit
+    const currentRetry = deposit.retryCount || 0;
+    if (currentRetry >= MAX_RETRY_COUNT) {
+      // Already retried 3 times — auto-fail
+      if (!matchedDepositIds.has(deposit.id)) {
+        try {
+          const nowIso = new Date().toISOString();
+          await adminDb.collection('deposits').doc(deposit.id).update({
+            status: 'failed',
+            rejectReason: `Auto-failed after ${MAX_RETRY_COUNT} verification attempts`,
+            reviewedBy: 'auto-verify (max retries exceeded)',
+            reviewedAt: nowIso,
+            autoFailed: true,
+            autoFailedReason: 'max_retries_exceeded',
+            autoFailedAt: nowIso,
+            retryCount: currentRetry,
+          });
+          const txDirectRef = adminDb.collection('transactions').doc(`tx_${deposit.id}`);
+          const txDirectSnap = await txDirectRef.get();
+          if (txDirectSnap.exists) {
+            await txDirectRef.update({ status: 'failed', rejectReason: 'Verification failed. Please contact support.' });
+          }
+          if (deposit.userId) {
+            await pushNotification(
+              String(deposit.userId),
+              'Deposit Failed',
+              `Your deposit of ${Number(deposit.amount).toFixed(2)} USDT could not be verified after ${MAX_RETRY_COUNT} attempts. Please contact support.`,
+              'warning'
+            );
+          }
+          failed.push({ depositId: deposit.id, amount: Number(deposit.amount), txHash });
+        } catch (e: any) {
+          console.warn(`auto-verify: auto-fail for max retries failed for ${deposit.id}:`, e?.message);
+        }
+        matchedDepositIds.add(deposit.id);
+      }
+      continue;
+    }
+
+    // Increment retry count
+    try {
+      await adminDb.collection('deposits').doc(deposit.id).update({
+        retryCount: currentRetry + 1,
+        lastRetryAt: new Date().toISOString(),
+      });
+    } catch (e: any) {
+      console.warn(`auto-verify: retry increment failed for ${deposit.id}:`, e?.message);
+    }
+
     try {
       const ok = await receiptMatches(txHash, wallet, Number(deposit.amount));
       if (!ok) continue;

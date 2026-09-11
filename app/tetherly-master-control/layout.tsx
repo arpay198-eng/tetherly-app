@@ -78,7 +78,7 @@ export default function MasterControlLayout({ children }: { children: React.Reac
       } catch {}
     }
     loadAdminData()
-    const interval = setInterval(loadAdminData, 4000)
+    const interval = setInterval(loadAdminData, 12000)
     return () => { alive = false; clearInterval(interval) }
   }, [isUnlocked])
 

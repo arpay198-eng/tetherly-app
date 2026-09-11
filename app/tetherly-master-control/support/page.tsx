@@ -95,7 +95,8 @@ export default function AdminSupportPage() {
     }
   }
 
-  const filtered = activeTab === 'all' ? tickets : tickets.filter((t) => t.status === activeTab)
+  const filtered = (activeTab === 'all' ? tickets : tickets.filter((t) => t.status === activeTab))
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime())
 
   const backToList = () => {
     setSelected(null)
@@ -233,7 +234,7 @@ export default function AdminSupportPage() {
               <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">All Clear</span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs font-medium text-slate-500 mt-1">
             Review user issues, reply to conversations, and resolve or close tickets. Users get a bell notification on every reply.
           </p>
         </div>

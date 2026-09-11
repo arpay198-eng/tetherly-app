@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
+import { Suspense } from 'react'
 import './globals.css'
 import FirebaseSync from '@/components/FirebaseSync'
-import AIChatWidget from '@/components/ai/AIChatWidget'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -27,8 +27,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body style={{margin:0, padding:0}}>
         <FirebaseSync />
-        <AIChatWidget />
-        <div id="app" className="mx-auto">{children}</div>
+        <div id="app" className="mx-auto">
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-3 border-emerald-200 border-t-emerald-600 animate-spin" /></div>}>
+            {children}
+          </Suspense>
+        </div>
       </body>
     </html>
   )

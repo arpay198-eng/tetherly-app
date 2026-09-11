@@ -87,6 +87,8 @@ export interface DepositRequest {
   autoMatchedHash?: string;
   autoMatchedAmount?: number;
   autoVerifiedAt?: string;
+  retryCount?: number;
+  lastRetryAt?: string;
 }
 
 export interface AdminUserItem {
@@ -104,6 +106,7 @@ export interface AdminUserItem {
   lastDepositAmount?: number;
   bonusClaimed?: boolean;
   depositBalance?: number;
+  bonusBalance?: number;
   referralCode?: string;
   referredBy?: string | null;
   referredByName?: string | null;
@@ -122,13 +125,16 @@ export interface AppState {
   lastDepositDate: string | null;
   lastDepositAmount: number;
   bonusClaimed: boolean;
+  bonusClaimedAt: string | null;
+  pendingClaims: number;
+  lastBonusGeneratedAt: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   register: (name: string, email: string, phone: string, password: string, referralInput?: string) => Promise<boolean>;
   logout: () => void;
   deposit: (amount: number, network: 'BEP20', txHash?: string) => Promise<DepositRequest | null>;
   approveDeposit: (id: string, hash?: string) => void;
   rejectDeposit: (id: string, reason?: string) => void;
-  withdraw: (amount: number, address: string, network: 'BEP20', confirmPassword?: string) => Promise<boolean>;
+  withdraw: (amount: number, address: string, network: 'BEP20', confirmPassword?: string, walletType?: 'deposit' | 'bonus') => Promise<boolean>;
   claimBonus: () => Promise<boolean>;
   markNotificationRead: (id: string) => void;
   markAllRead: () => void;
@@ -139,8 +145,8 @@ export interface AppState {
   approveWithdrawal: (id: string, hash?: string) => void;
   rejectWithdrawal: (id: string, reason?: string) => void;
   updateUserBalance: (userId: string, newBalance: number) => void;
-  creditUser: (userId: string, amount: number, note?: string) => void;
-  debitUser: (userId: string, amount: number, note?: string) => void;
+  creditUser: (userId: string, amount: number, note?: string, walletType?: 'deposit' | 'bonus') => void;
+  debitUser: (userId: string, amount: number, note?: string, walletType?: 'deposit' | 'bonus') => void;
   toggleUserStatus: (userId: string) => void;
   setAllUsers: (users: AdminUserItem[]) => void;
   setWithdrawalRequests: (requests: WithdrawalRequest[]) => void;
@@ -161,21 +167,14 @@ export const useStore = create<AppState>()(
   notifications: [],
   withdrawalRequests: [],
   depositRequests: [],
-  allUsers: [
-    {
-      id: '2817782317',
-      name: 'Rahim Badsha',
-      email: 'rohim.badsha198@gmail.com',
-      password: 'Rj6542',
-      balance: 0,
-      status: 'active',
-      joinedDate: '2026-09-07',
-    },
-  ],
+  allUsers: [],
   isLoggedIn: false,
-  lastDepositDate: null,
-  lastDepositAmount: 0,
-  bonusClaimed: false,
+      lastDepositDate: null,
+      lastDepositAmount: 0,
+      bonusClaimed: false,
+      bonusClaimedAt: null,
+      pendingClaims: 0,
+      lastBonusGeneratedAt: null,
 
   login: async (email: string, password: string) => {
     const cleanEmail = email.trim().toLowerCase();
@@ -215,6 +214,9 @@ export const useStore = create<AppState>()(
       lastDepositDate: rec.lastDepositDate || null,
       lastDepositAmount: rec.lastDepositAmount || 0,
       bonusClaimed: rec.bonusClaimed || false,
+      bonusClaimedAt: rec.bonusClaimedAt || null,
+      pendingClaims: rec.pendingClaims || 0,
+      lastBonusGeneratedAt: rec.lastBonusGeneratedAt || null,
     });
     void get().loadNotifications();
     return true;
@@ -267,6 +269,9 @@ export const useStore = create<AppState>()(
       lastDepositDate: null,
       lastDepositAmount: 0,
       bonusClaimed: false,
+      bonusClaimedAt: null,
+      pendingClaims: 0,
+      lastBonusGeneratedAt: null,
     });
 
     // Obtain a session token for the new account.
@@ -385,23 +390,50 @@ export const useStore = create<AppState>()(
     return req;
   },
 
-  withdraw: async (amount: number, address: string, network: 'BEP20', confirmPassword?: string) => {
+  withdraw: async (amount: number, address: string, network: 'BEP20', confirmPassword?: string, walletType: 'deposit' | 'bonus' = 'deposit') => {
     const { wallet, user, allUsers, lastDepositDate, lastDepositAmount } = get();
-    if (!user || amount > wallet.balance) return false;
+    if (!user) throw new Error('You must be logged in to submit a withdrawal.');
+    
+    const selectedBalance = walletType === 'deposit' ? wallet.depositBalance : wallet.bonusBalance;
+    if (amount > selectedBalance) throw new Error(`Withdrawal amount (${amount} USDT) exceeds available balance (${selectedBalance} USDT) in ${walletType === 'deposit' ? 'Deposit' : 'Bonus'} Wallet.`);
 
-    // Deposit lock: the deposit principal is locked for 24h from the latest deposit.
-    if (lastDepositDate && lastDepositAmount > 0) {
+    // Deposit lock: the deposit principal is locked for 24h from the latest deposit (admin exempt).
+    if (walletType === 'deposit' && !user.isAdmin && lastDepositDate && lastDepositAmount > 0) {
       const lockedUntil = new Date(lastDepositDate).getTime() + 24 * 60 * 60 * 1000;
-      if (Date.now() < lockedUntil) return false;
+      if (Date.now() < lockedUntil) {
+        throw new Error('Your deposit is locked for 24 hours. Withdrawals will unlock after the countdown.');
+      }
     }
 
     // Verify account is active
     const userRecord = allUsers.find((u) => u.id === user.id);
-    if (userRecord && userRecord.status === 'blocked') return false;
+    if (userRecord && userRecord.status === 'blocked') {
+      throw new Error('Your account has been suspended.');
+    }
 
-    const reqId = `wd_${Date.now()}`;
+    // Server-side: balance is deducted atomically and locked for 24h deposit window.
+    let res: any;
+    try {
+      res = await apiPost('/withdrawals', {
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        amount,
+        address,
+        network,
+        confirmPassword,
+        walletType,
+      });
+    } catch (error: any) {
+      throw new Error(error?.message || 'Withdrawal failed');
+    }
+    if (!res || !res.success) {
+      throw new Error(res?.error || 'Withdrawal submission failed on server');
+    }
+
+    const serverWdId = res.id || `wd_${Date.now()}`;
     const req: WithdrawalRequest = {
-      id: reqId,
+      id: serverWdId,
       userId: user.id,
       userName: user.name,
       userEmail: user.email,
@@ -412,25 +444,16 @@ export const useStore = create<AppState>()(
       date: new Date().toISOString(),
     };
 
-    // Server-side: balance is deducted atomically and locked for 24h deposit window.
-    let res: any;
-    try {
-      res = await apiPost('/withdrawals', { ...req, confirmPassword });
-    } catch (error: any) {
-      throw new Error(error?.message || 'Withdrawal failed');
-    }
-    if (!res || !res.success) return false;
-
     const updated = res.user || {};
 
     const tx: Transaction = {
-      id: `tx_${reqId}`,
+      id: `tx_${serverWdId}`,
       type: 'withdrawal',
       amount: -amount,
       network,
       status: 'pending',
       date: new Date().toISOString(),
-      hash: reqId,
+      hash: serverWdId,
     };
 
     set({
@@ -455,8 +478,7 @@ export const useStore = create<AppState>()(
   },
 
   claimBonus: async () => {
-    const { wallet, user, allUsers, bonusClaimed } = get();
-    if (bonusClaimed) return false;
+    const { wallet, user, allUsers } = get();
     if ((wallet.depositBalance ?? 0) <= 0) return false;
 
     let res: any;
@@ -468,13 +490,14 @@ export const useStore = create<AppState>()(
     if (!res || !res.success) return false;
 
     const bonusAmount = Number(res.bonus) || 0;
+    const claimedAt = new Date().toISOString();
     const bonusTx: Transaction = {
       id: `tx_${Date.now()}`,
       type: 'bonus',
       amount: bonusAmount,
       network: 'BEP20',
       status: 'completed',
-      date: new Date().toISOString(),
+      date: claimedAt,
     };
 
     set({
@@ -485,11 +508,15 @@ export const useStore = create<AppState>()(
         bonusBalance: res.bonusBalance !== undefined ? res.bonusBalance : (wallet.bonusBalance || 0) + bonusAmount,
       },
       allUsers: user ? allUsers.map((u) => (u.id === user.id ? { ...u, balance: res.balance } : u)) : allUsers,
-      bonusClaimed: true,
+      pendingClaims: 0,
+      bonusClaimedAt: claimedAt,
+      lastBonusGeneratedAt: claimedAt,
       transactions: [bonusTx, ...get().transactions],
     });
 
     syncTransactionToFirestore(bonusTx);
+    // Refresh from server after 1s so countdown restarts with accurate lastBonusGeneratedAt
+    setTimeout(() => { get().refreshUser().catch(() => {}); }, 1000);
     return true;
   },
 
@@ -521,12 +548,20 @@ export const useStore = create<AppState>()(
     const current = get().user;
     if (!current) return;
     try {
-      const data = await apiGet(`/users?id=${current.id}`);
+      const [data, txs, notifList, bonusData] = await Promise.all([
+        apiGet(`/users?id=${current.id}`),
+        apiGet(`/transactions?userId=${current.id}`),
+        apiGet('/notifications'),
+        apiGet('/bonus'),
+      ]);
       if (data && data.id) {
         if (data.status === 'blocked') {
           get().logout();
           return;
         }
+        const serverPendingClaims = bonusData && typeof bonusData.pendingClaims === 'number'
+          ? bonusData.pendingClaims
+          : (data.pendingClaims ?? undefined);
         set((state) => ({
           user: state.user
             ? {
@@ -548,15 +583,17 @@ export const useStore = create<AppState>()(
           lastDepositDate: data.lastDepositDate ?? state.lastDepositDate,
           lastDepositAmount: Number(data.lastDepositAmount ?? state.lastDepositAmount),
           bonusClaimed: data.bonusClaimed ?? state.bonusClaimed,
+          bonusClaimedAt: data.bonusClaimedAt ?? state.bonusClaimedAt,
+          pendingClaims: serverPendingClaims ?? state.pendingClaims,
+          lastBonusGeneratedAt: data.lastBonusGeneratedAt ?? state.lastBonusGeneratedAt,
         }));
       }
-
-      const txs = await apiGet(`/transactions?userId=${current.id}`);
       if (Array.isArray(txs)) {
         set({ transactions: txs });
       }
-
-      await get().loadNotifications();
+      if (Array.isArray(notifList)) {
+        set({ notifications: notifList });
+      }
     } catch {
       // Silently ignore network or offline errors
     }
@@ -703,7 +740,10 @@ export const useStore = create<AppState>()(
             },
             lastDepositDate: new Date().toISOString(),
             lastDepositAmount: req.amount,
-            bonusClaimed: false,
+  bonusClaimed: false,
+  bonusClaimedAt: null,
+  pendingClaims: 0,
+  lastBonusGeneratedAt: null,
           }
         : {}),
       notifications: [
@@ -796,12 +836,11 @@ export const useStore = create<AppState>()(
     }
   },
 
-  creditUser: (userId: string, amount: number, note?: string) => {
+  creditUser: (userId: string, amount: number, note?: string, walletType: 'deposit' | 'bonus' = 'deposit') => {
     const { user, wallet, allUsers, transactions, notifications } = get();
     const target = allUsers.find((u) => u.id === userId);
     if (!target || amount <= 0) return;
 
-    const newBalance = target.balance + amount;
     const isCurrent = user?.id === userId;
 
     const tx: Transaction = {
@@ -817,13 +856,19 @@ export const useStore = create<AppState>()(
     const notif: Notification = {
       id: `notif_${Date.now()}`,
       title: 'Account Credited',
-      message: `${amount.toLocaleString('en-US')} USDT has been credited to your account by administrator${note ? `: ${note}` : ''}.`,
+      message: `${amount.toLocaleString('en-US')} USDT has been credited to your ${walletType === 'deposit' ? 'Deposit' : 'Bonus'} Wallet by administrator${note ? `: ${note}` : ''}.`,
       read: false,
       date: new Date().toISOString(),
       type: 'success',
     };
 
-    const updatedTarget: AdminUserItem = { ...target, balance: newBalance };
+    // Update the correct wallet
+    const updatedTarget: AdminUserItem = { 
+      ...target, 
+      balance: walletType === 'deposit' ? target.balance + amount : target.balance,
+      depositBalance: walletType === 'deposit' ? (target.depositBalance || 0) + amount : target.depositBalance,
+      bonusBalance: walletType === 'bonus' ? (target.bonusBalance || 0) + amount : target.bonusBalance,
+    };
 
     set({
       allUsers: allUsers.map((u) => (u.id === userId ? updatedTarget : u)),
@@ -831,8 +876,9 @@ export const useStore = create<AppState>()(
         ? {
             wallet: {
               ...wallet,
-              balance: wallet.balance + amount,
-              depositBalance: wallet.depositBalance + amount,
+              balance: walletType === 'deposit' ? wallet.balance + amount : wallet.balance,
+              depositBalance: walletType === 'deposit' ? wallet.depositBalance + amount : wallet.depositBalance,
+              bonusBalance: walletType === 'bonus' ? wallet.bonusBalance + amount : wallet.bonusBalance,
             },
           }
         : {}),
@@ -845,14 +891,16 @@ export const useStore = create<AppState>()(
     syncNotificationToFirestore(userId, 'Account Credited', notif.message, 'success');
   },
 
-  debitUser: (userId: string, amount: number, note?: string) => {
+  debitUser: (userId: string, amount: number, note?: string, walletType: 'deposit' | 'bonus' = 'deposit') => {
     const { user, wallet, allUsers, transactions, notifications } = get();
     const target = allUsers.find((u) => u.id === userId);
     if (!target || amount <= 0) return;
 
-    const newBalance = Math.max(0, target.balance - amount);
-    const actualDeducted = target.balance - newBalance;
     const isCurrent = user?.id === userId;
+
+    // Check balance from selected wallet
+    const selectedBalance = walletType === 'deposit' ? (target.depositBalance || 0) : (target.bonusBalance || 0);
+    const actualDeducted = Math.min(amount, selectedBalance);
 
     const tx: Transaction = {
       id: `tx_deb_${Date.now()}`,
@@ -867,13 +915,19 @@ export const useStore = create<AppState>()(
     const notif: Notification = {
       id: `notif_${Date.now()}`,
       title: 'Account Debited',
-      message: `${actualDeducted.toLocaleString('en-US')} USDT has been debited from your account by administrator${note ? `: ${note}` : ''}.`,
+      message: `${actualDeducted.toLocaleString('en-US')} USDT has been debited from your ${walletType === 'deposit' ? 'Deposit' : 'Bonus'} Wallet by administrator${note ? `: ${note}` : ''}.`,
       read: false,
       date: new Date().toISOString(),
       type: 'warning',
     };
 
-    const updatedTarget: AdminUserItem = { ...target, balance: newBalance };
+    // Update the correct wallet
+    const updatedTarget: AdminUserItem = { 
+      ...target, 
+      balance: walletType === 'deposit' ? Math.max(0, target.balance - actualDeducted) : target.balance,
+      depositBalance: walletType === 'deposit' ? Math.max(0, (target.depositBalance || 0) - actualDeducted) : target.depositBalance,
+      bonusBalance: walletType === 'bonus' ? Math.max(0, (target.bonusBalance || 0) - actualDeducted) : target.bonusBalance,
+    };
 
     set({
       allUsers: allUsers.map((u) => (u.id === userId ? updatedTarget : u)),
@@ -881,7 +935,9 @@ export const useStore = create<AppState>()(
         ? {
             wallet: {
               ...wallet,
-              balance: Math.max(0, wallet.balance - actualDeducted),
+              balance: walletType === 'deposit' ? Math.max(0, wallet.balance - actualDeducted) : wallet.balance,
+              depositBalance: walletType === 'deposit' ? Math.max(0, wallet.depositBalance - actualDeducted) : wallet.depositBalance,
+              bonusBalance: walletType === 'bonus' ? Math.max(0, wallet.bonusBalance - actualDeducted) : wallet.bonusBalance,
             },
           }
         : {}),
@@ -949,11 +1005,15 @@ export const useStore = create<AppState>()(
       transactions: state.transactions,
       notifications: state.notifications,
       withdrawalRequests: state.withdrawalRequests,
+      depositRequests: state.depositRequests,
       allUsers: state.allUsers,
       isLoggedIn: state.isLoggedIn,
       lastDepositDate: state.lastDepositDate,
       lastDepositAmount: state.lastDepositAmount,
       bonusClaimed: state.bonusClaimed,
+      bonusClaimedAt: state.bonusClaimedAt,
+      pendingClaims: state.pendingClaims,
+      lastBonusGeneratedAt: state.lastBonusGeneratedAt,
     }),
   }
 ));

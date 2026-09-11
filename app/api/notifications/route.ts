@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { getAuth } from '@/lib/auth';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: Request) {
   try {
     const auth = getAuth(request);

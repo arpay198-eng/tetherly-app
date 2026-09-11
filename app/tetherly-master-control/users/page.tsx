@@ -37,6 +37,7 @@ export default function AdminUsersPage() {
   // Credit / Debit Modal State
   const [activeUser, setActiveUser] = useState<AdminUserItem | null>(null)
   const [actionType, setActionType] = useState<'credit' | 'debit'>('credit')
+  const [walletType, setWalletType] = useState<'deposit' | 'bonus'>('deposit')
   const [amountInput, setAmountInput] = useState('')
   const [noteInput, setNoteInput] = useState('')
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
@@ -50,6 +51,7 @@ export default function AdminUsersPage() {
   const handleOpenAction = (user: AdminUserItem, type: 'credit' | 'debit') => {
     setActiveUser(user)
     setActionType(type)
+    setWalletType('deposit')
     setAmountInput('')
     setNoteInput('')
     setFeedbackMsg(null)
@@ -63,32 +65,44 @@ export default function AdminUsersPage() {
       return
     }
 
-    if (actionType === 'debit' && amt > activeUser.balance) {
-      setFeedbackMsg({ text: `Amount exceeds user balance ($${activeUser.balance.toLocaleString()} USDT).`, type: 'error' })
+    const selectedBalance = walletType === 'deposit' ? (activeUser.depositBalance || 0) : (activeUser.bonusBalance || 0);
+    if (actionType === 'debit' && amt > selectedBalance) {
+      setFeedbackMsg({ text: `Amount exceeds user's ${walletType === 'deposit' ? 'Deposit' : 'Bonus'} Wallet balance ($${selectedBalance.toLocaleString()} USDT).`, type: 'error' })
       return
     }
 
     if (actionType === 'credit') {
-      creditUser(activeUser.id, amt, noteInput.trim() || undefined)
+      creditUser(activeUser.id, amt, noteInput.trim() || undefined, walletType)
       setFeedbackMsg({
-        text: `Successfully credited $${amt.toLocaleString()} USDT to ${activeUser.name}!`,
+        text: `Successfully credited $${amt.toLocaleString()} USDT to ${activeUser.name}'s ${walletType === 'deposit' ? 'Deposit' : 'Bonus'} Wallet!`,
         type: 'success',
       })
     } else {
-      debitUser(activeUser.id, amt, noteInput.trim() || undefined)
+      debitUser(activeUser.id, amt, noteInput.trim() || undefined, walletType)
       setFeedbackMsg({
-        text: `Successfully debited $${amt.toLocaleString()} USDT from ${activeUser.name}!`,
+        text: `Successfully debited $${amt.toLocaleString()} USDT from ${activeUser.name}'s ${walletType === 'deposit' ? 'Deposit' : 'Bonus'} Wallet!`,
         type: 'success',
       })
     }
 
-    const newBal = actionType === 'credit'
-      ? activeUser.balance + amt
-      : Math.max(0, activeUser.balance - amt)
-
+    // Update local state for selected wallet
     setAllUsers((prev) =>
-      prev.map((u) => (u.id === activeUser.id ? { ...u, balance: newBal } : u))
-    )
+      prev.map((u) => {
+        if (u.id !== activeUser.id) return u;
+        if (walletType === 'deposit') {
+          return { 
+            ...u, 
+            balance: actionType === 'credit' ? u.balance + amt : Math.max(0, u.balance - amt),
+            depositBalance: actionType === 'credit' ? (u.depositBalance || 0) + amt : Math.max(0, (u.depositBalance || 0) - amt),
+          };
+        } else {
+          return { 
+            ...u, 
+            bonusBalance: actionType === 'credit' ? (u.bonusBalance || 0) + amt : Math.max(0, (u.bonusBalance || 0) - amt),
+          };
+        }
+      })
+    );
 
     setTimeout(() => {
       setActiveUser(null)
@@ -106,10 +120,13 @@ export default function AdminUsersPage() {
   }
 
   const currentAmt = parseFloat(amountInput) || 0
+  const selectedBalance = activeUser 
+    ? (walletType === 'deposit' ? (activeUser.depositBalance || 0) : (activeUser.bonusBalance || 0))
+    : 0
   const resultingBalance = activeUser
     ? actionType === 'credit'
-      ? activeUser.balance + currentAmt
-      : Math.max(0, activeUser.balance - currentAmt)
+      ? selectedBalance + currentAmt
+      : Math.max(0, selectedBalance - currentAmt)
     : 0
 
   const filteredUsers = (allUsers || []).filter(
@@ -117,7 +134,7 @@ export default function AdminUsersPage() {
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       u.id.includes(search)
-  )
+  ).sort((a, b) => new Date(b.joinedDate || 0).getTime() - new Date(a.joinedDate || 0).getTime())
 
   return (
     <div className="space-y-6">
@@ -130,7 +147,7 @@ export default function AdminUsersPage() {
               {(allUsers || []).length} Registered
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs font-medium text-slate-500 mt-1">
             Search users by UID or email, credit/debit USDT balances, or freeze suspicious accounts.
           </p>
         </div>
@@ -330,11 +347,41 @@ export default function AdminUsersPage() {
               </button>
             </div>
 
+            {/* Wallet Selector */}
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => { setWalletType('deposit'); setFeedbackMsg(null); }}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  walletType === 'deposit'
+                    ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-400'
+                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                }`}
+              >
+                Deposit Wallet
+              </button>
+              <button
+                type="button"
+                onClick={() => { setWalletType('bonus'); setFeedbackMsg(null); }}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  walletType === 'bonus'
+                    ? 'bg-purple-100 text-purple-700 border-2 border-purple-400'
+                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                }`}
+              >
+                Bonus Wallet
+              </button>
+            </div>
+
             {/* Current Balance & Live Calculation Preview */}
             <div className="p-3 mb-4 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Current Balance</span>
-                <span className="font-extrabold text-slate-900 text-sm">${activeUser.balance.toLocaleString('en-US')} USDT</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">
+                  {walletType === 'deposit' ? 'Deposit' : 'Bonus'} Balance
+                </span>
+                <span className={`font-extrabold text-sm ${walletType === 'deposit' ? 'text-emerald-600' : 'text-purple-600'}`}>
+                  ${((walletType === 'deposit' ? activeUser.depositBalance : activeUser.bonusBalance) || 0).toLocaleString('en-US')} USDT
+                </span>
               </div>
               <div className="text-center">
                 <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">
@@ -371,10 +418,10 @@ export default function AdminUsersPage() {
                 {actionType === 'debit' && (
                   <button
                     type="button"
-                    onClick={() => setAmountInput(String(activeUser.balance))}
+                    onClick={() => setAmountInput(String(selectedBalance))}
                     className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-100 hover:bg-rose-200 text-rose-700 transition-all cursor-pointer"
                   >
-                    All (${activeUser.balance.toLocaleString('en-US')})
+                    All (${selectedBalance.toLocaleString('en-US')})
                   </button>
                 )}
               </div>
@@ -391,7 +438,7 @@ export default function AdminUsersPage() {
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
                   className="w-full pl-4 pr-16 py-3 text-sm font-bold rounded-xl border border-slate-200 outline-none focus:border-emerald-500"
-                  placeholder="0.00"
+                  placeholder="0"
                   min="0"
                 />
                 <span className="absolute right-3.5 top-3.5 text-xs font-bold text-slate-400">

@@ -45,3 +45,11 @@ input[type="number"] { -moz-appearance: textfield; }
 .input-premium { background: #fff; border: 1px solid #e5e7eb; transition: all 0.2s ease; color: #1a1a1a; }
 .input-premium:focus { border-color: rgba(16, 185, 129, 0.5); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); outline: none; }
 .badge-premium { background: #e8fff1; color: #15b566; }
+
+/* Blinking dot animation */
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+.blink-dot { animation: blink-dot 1.2s ease-in-out infinite; }
+

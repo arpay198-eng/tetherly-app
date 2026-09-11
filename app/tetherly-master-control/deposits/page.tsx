@@ -46,7 +46,7 @@ export default function AdminDepositsPage() {
       }
     }
     load()
-    const interval = setInterval(load, 3000)
+    const interval = setInterval(load, 12000)
     return () => { alive = false; clearInterval(interval) }
   }, [])
 
@@ -63,7 +63,7 @@ export default function AdminDepositsPage() {
       if (data.error) {
         setVerifyMsg({ type: 'err', text: data.error })
       } else if (data.newlyMatched && data.newlyMatched.length > 0) {
-        const amounts = data.newlyMatched.map((m: any) => '$' + Number(m.amount).toFixed(2)).join(', ')
+        const amounts = data.newlyMatched.map((m: any) => '$' + Number(m.amount)).join(', ')
         setVerifyMsg({ type: 'ok', text: `Auto-verified ${data.newlyMatched.length} pending deposit${data.newlyMatched.length > 1 ? 's' : ''} on-chain (${amounts}).` })
       } else if (data.pendingCount > 0 && data.matched.length === 0) {
         setVerifyMsg({ type: 'info', text: `Checked ${data.incoming} on-chain transfers — no match found for ${data.pendingCount} pending deposit${data.pendingCount > 1 ? 's' : ''}.` })
@@ -149,7 +149,7 @@ export default function AdminDepositsPage() {
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs font-medium text-slate-500 mt-1">
             Review incoming USDT deposits, verify on-chain transaction hashes via Tronscan/BscScan, and credit user balances safely.
           </p>
         </div>
@@ -443,6 +443,11 @@ className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs
                           {req.autoVerified && (
                             <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white shadow-sm">
                               ⚡ Auto-Matched
+                            </span>
+                          )}
+                          {req.status === 'pending' && req.retryCount && req.retryCount > 0 && (
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700">
+                              Retry {req.retryCount}/3
                             </span>
                           )}
                         </div>

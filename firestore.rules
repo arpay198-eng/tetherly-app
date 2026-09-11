@@ -7,52 +7,8 @@ service cloud.firestore {
     // calls BYPASS these rules entirely, so server-side verification is immune
     // to client tampering.
 
-    // Client writes are ALL denied — data flows only through server APIs.
-    // Client reads are permitted for real-time admin sync and form validation.
+    // DENY ALL CLIENT ACCESS — all reads/writes go through server APIs only.
 
-    // 1. Users Collection (server write-only; read public for form validation)
-    match /users/{userId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    // 2. Withdrawals Collection (server write-only; read public)
-    match /withdrawals/{withdrawalId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    // 3. Deposits Collection (server write-only; read public)
-    match /deposits/{depositId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    // 4. Transactions Collection (audit ledger; server write-only; read public)
-    match /transactions/{txId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    // 5. Used-hash ledger (server write-only; read public)
-    match /used_hashes/{hashId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    // 6. Referral codes (server write-only; read public)
-    match /referral_codes/{codeId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    // 7. Notifications (server write-only; read public)
-    match /notifications/{notifId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    // 8. Everything else: deny all client access.
     match /{document=**} {
       allow read, write: if false;
     }

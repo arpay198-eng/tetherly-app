@@ -1,11 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useStore } from '@/store/useStore'
 
 export default function AdminTransactionsPage() {
-  const { transactions } = useStore()
+  const router = useRouter()
+  const { isLoggedIn, transactions } = useStore()
+
+  useEffect(() => {
+    if (!isLoggedIn) router.replace('/auth/login')
+  }, [isLoggedIn, router])
   const [filter, setFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'bonus'>('all')
   const [copiedHash, setCopiedHash] = useState<string | null>(null)
 

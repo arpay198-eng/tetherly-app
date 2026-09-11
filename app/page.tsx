@@ -16,8 +16,8 @@ export default function SplashPage() {
       router.replace('/dashboard');
       return;
     }
-    const t1 = setTimeout(() => setFading(true), 1800);
-    const t2 = setTimeout(() => setShow(true), 2400);
+    const t1 = setTimeout(() => setFading(true), 600);
+    const t2 = setTimeout(() => setShow(true), 900);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [isLoggedIn, router]);
 
@@ -28,7 +28,7 @@ export default function SplashPage() {
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.05) 0%, transparent 70%)' }} />
       </div>
 
-      <div className={`flex flex-col items-center transition-all duration-1000 ${fading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+      <div className={`flex flex-col items-center transition-all duration-500 ${fading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
         <div className="mb-6 relative">
           <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
             <rect x="4" y="4" width="72" height="72" rx="18" fill="url(#logoGrad)" stroke="rgba(16,185,129,0.3)" strokeWidth="1" />

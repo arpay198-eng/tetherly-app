@@ -1,11 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useStore, WithdrawalRequest } from '@/store/useStore'
 
 export default function AdminWithdrawalsPage() {
-  const { withdrawalRequests, approveWithdrawal, rejectWithdrawal } = useStore()
+  const router = useRouter()
+  const { isLoggedIn, withdrawalRequests, approveWithdrawal, rejectWithdrawal } = useStore()
+
+  useEffect(() => {
+    if (!isLoggedIn) router.replace('/auth/login')
+  }, [isLoggedIn, router])
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'completed' | 'rejected'>('all')
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')

@@ -9,18 +9,37 @@ const BONUS_RATE = 0.04;
 
 export default function BonusPage() {
   const router = useRouter();
-  const { isLoggedIn, wallet, lastDepositDate, lastDepositAmount, bonusClaimed, transactions, claimBonus } = useStore();
+  const isLoggedIn = useStore((s) => s.isLoggedIn);
+  const wallet = useStore((s) => s.wallet);
+  const lastDepositDate = useStore((s) => s.lastDepositDate);
+  const lastDepositAmount = useStore((s) => s.lastDepositAmount);
+  const pendingClaims = useStore((s) => s.pendingClaims);
+  const lastBonusGeneratedAt = useStore((s) => s.lastBonusGeneratedAt);
+  const transactions = useStore((s) => s.transactions);
+  const claimBonus = useStore((s) => s.claimBonus);
+  const refreshUser = useStore((s) => s.refreshUser);
   const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0 });
+  const [claiming, setClaiming] = useState(false);
 
+  // Same logic as dashboard — based on pendingClaims + lastBonusGeneratedAt
   const getRemaining = useCallback(() => {
-    if (!lastDepositDate || lastDepositAmount <= 0 || bonusClaimed) return 0;
+    if (!lastDepositDate || lastDepositAmount <= 0) return 0;
     if ((wallet.depositBalance ?? 0) <= 0) return 0;
-    const claimableAt = new Date(lastDepositDate).getTime() + 24 * 60 * 60 * 1000;
-    return Math.max(0, claimableAt - Date.now());
-  }, [lastDepositDate, lastDepositAmount, bonusClaimed, wallet.depositBalance]);
+    if (pendingClaims > 0) return 0; // Already ready to claim
+    let claimStartAt: number;
+    if (lastBonusGeneratedAt) {
+      claimStartAt = new Date(lastBonusGeneratedAt).getTime() + 24 * 60 * 60 * 1000;
+    } else {
+      claimStartAt = new Date(lastDepositDate).getTime() + 24 * 60 * 60 * 1000;
+    }
+    return Math.max(0, claimStartAt - Date.now());
+  }, [lastDepositDate, lastDepositAmount, pendingClaims, lastBonusGeneratedAt, wallet.depositBalance]);
 
   useEffect(() => {
     if (!isLoggedIn) { router.replace('/auth/login'); return; }
+
+    // Sync fresh data from server on mount
+    void refreshUser();
 
     const updateCountdown = () => {
       const diff = getRemaining();
@@ -34,21 +53,28 @@ export default function BonusPage() {
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [isLoggedIn, router, getRemaining]);
+  }, [isLoggedIn, router, getRemaining, refreshUser]);
 
   if (!isLoggedIn) return null;
 
   const hasDeposit = !!lastDepositDate && lastDepositAmount > 0 && wallet.depositBalance > 0;
-  const bonusAmount = hasDeposit ? wallet.depositBalance * BONUS_RATE : 0;
-  const canClaim = hasDeposit && !bonusClaimed && getRemaining() === 0;
-  const waiting = hasDeposit && !bonusClaimed && getRemaining() > 0;
+  const bonusPerClaim = hasDeposit ? Math.round(wallet.depositBalance * BONUS_RATE * 100) / 100 : 0;
+  const totalPendingBonus = Math.round(bonusPerClaim * pendingClaims * 100) / 100;
+  const canClaim = hasDeposit && pendingClaims > 0;
+  const waiting = hasDeposit && pendingClaims === 0 && getRemaining() > 0;
 
   const bonusHistory = transactions.filter((tx) => tx.type === 'bonus').slice(0, 10);
   const totalEarned = bonusHistory.reduce((sum, tx) => sum + tx.amount, 0);
 
-  const handleClaim = () => {
-    if (canClaim) {
-      claimBonus().catch(console.error);
+  const handleClaim = async () => {
+    if (!canClaim || claiming) return;
+    setClaiming(true);
+    try {
+      await claimBonus();
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setClaiming(false);
     }
   };
 
@@ -65,36 +91,55 @@ export default function BonusPage() {
               <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
             </svg>
             <p className="text-xs mb-1" style={{ color: '#888' }}>4% of your deposit</p>
-            <h2 className="text-3xl font-bold tabular-nums mb-1" style={{ color: '#1a1a1a' }}>${bonusAmount.toFixed(2)}</h2>
-            {hasDeposit && <p className="text-[10px] mb-4" style={{ color: '#999' }}>on ${wallet.depositBalance.toFixed(2)} deposit balance</p>}
+
+            {/* Show pending total or per-claim amount */}
+            <h2 className="text-3xl font-bold tabular-nums mb-1" style={{ color: '#1a1a1a' }}>
+              ${canClaim ? totalPendingBonus : bonusPerClaim}
+            </h2>
+            {hasDeposit && (
+              <p className="text-[10px] mb-4" style={{ color: '#999' }}>
+                {canClaim && pendingClaims > 1
+                  ? `${pendingClaims} claims ready · $${bonusPerClaim} each`
+                  : `on $${wallet.depositBalance} deposit balance`}
+              </p>
+            )}
             {!hasDeposit && <p className="text-[10px] mb-4" style={{ color: '#999' }}>make a deposit to unlock</p>}
 
-            {hasDeposit && !bonusClaimed ? (
+            {hasDeposit ? (
               <>
-                <div className="flex items-center justify-center gap-2 mb-5">
-                  <div className="w-16 text-center py-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-                    <span className="text-xl font-bold tabular-nums" style={{ color: '#1a1a1a' }}>{String(countdown.h).padStart(2, '0')}</span>
-                    <p className="text-[8px] uppercase tracking-wider mt-0.5" style={{ color: '#bbb' }}>HRS</p>
+                {/* Countdown — only show when waiting for next claim */}
+                {waiting && (
+                  <div className="flex items-center justify-center gap-2 mb-5">
+                    <div className="w-16 text-center py-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+                      <span className="text-xl font-bold tabular-nums" style={{ color: '#1a1a1a' }}>{String(countdown.h).padStart(2, '0')}</span>
+                      <p className="text-[8px] uppercase tracking-wider mt-0.5" style={{ color: '#bbb' }}>HRS</p>
+                    </div>
+                    <span className="text-xl font-bold" style={{ color: '#ccc' }}>:</span>
+                    <div className="w-16 text-center py-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+                      <span className="text-xl font-bold tabular-nums" style={{ color: '#1a1a1a' }}>{String(countdown.m).padStart(2, '0')}</span>
+                      <p className="text-[8px] uppercase tracking-wider mt-0.5" style={{ color: '#bbb' }}>MIN</p>
+                    </div>
+                    <span className="text-xl font-bold" style={{ color: '#ccc' }}>:</span>
+                    <div className="w-16 text-center py-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+                      <span className="text-xl font-bold tabular-nums" style={{ color: '#1a1a1a' }}>{String(countdown.s).padStart(2, '0')}</span>
+                      <p className="text-[8px] uppercase tracking-wider mt-0.5" style={{ color: '#bbb' }}>SEC</p>
+                    </div>
                   </div>
-                  <span className="text-xl font-bold" style={{ color: '#ccc' }}>:</span>
-                  <div className="w-16 text-center py-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-                    <span className="text-xl font-bold tabular-nums" style={{ color: '#1a1a1a' }}>{String(countdown.m).padStart(2, '0')}</span>
-                    <p className="text-[8px] uppercase tracking-wider mt-0.5" style={{ color: '#bbb' }}>MIN</p>
-                  </div>
-                  <span className="text-xl font-bold" style={{ color: '#ccc' }}>:</span>
-                  <div className="w-16 text-center py-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-                    <span className="text-xl font-bold tabular-nums" style={{ color: '#1a1a1a' }}>{String(countdown.s).padStart(2, '0')}</span>
-                    <p className="text-[8px] uppercase tracking-wider mt-0.5" style={{ color: '#bbb' }}>SEC</p>
-                  </div>
-                </div>
+                )}
 
                 <button
                   onClick={handleClaim}
-                  disabled={!canClaim}
-                  className={`w-full py-3.5 rounded-xl text-sm font-semibold ${canClaim ? 'btn-premium text-white' : ''}`}
-                  style={!canClaim ? { background: '#f9fafb', color: '#999' } : {}}
+                  disabled={!canClaim || claiming}
+                  className={`w-full py-3.5 rounded-xl text-sm font-semibold ${canClaim && !claiming ? 'btn-premium text-white' : ''}`}
+                  style={!canClaim || claiming ? { background: '#f9fafb', color: '#999' } : {}}
                 >
-                  {canClaim ? `Claim $${bonusAmount.toFixed(2)}` : waiting ? `Available in ${String(countdown.h).padStart(2, '0')}:${String(countdown.m).padStart(2, '0')}:${String(countdown.s).padStart(2, '0')}` : 'Bonus Claimed'}
+                  {claiming
+                    ? 'Claiming...'
+                    : canClaim
+                      ? `Claim $${totalPendingBonus}${pendingClaims > 1 ? ` (${pendingClaims} claims)` : ''}`
+                      : waiting
+                        ? `Next in ${String(countdown.h).padStart(2, '0')}:${String(countdown.m).padStart(2, '0')}:${String(countdown.s).padStart(2, '0')}`
+                        : 'Loading...'}
                 </button>
               </>
             ) : (
@@ -102,7 +147,7 @@ export default function BonusPage() {
                 onClick={() => router.push('/deposit')}
                 className="w-full py-3.5 rounded-xl text-sm font-semibold btn-premium text-white"
               >
-                {bonusClaimed ? 'Bonus Claimed' : 'Make a Deposit'}
+                Make a Deposit
               </button>
             )}
           </div>
@@ -111,9 +156,9 @@ export default function BonusPage() {
         <div className="rounded-2xl p-4 card-premium mb-5">
           <div className="flex items-center gap-2 mb-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-            <span className="text-[10px] uppercase tracking-wider" style={{ color: '#999' }}>Total Earned</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#999' }}>Total Earned</span>
           </div>
-          <p className="text-2xl font-bold tabular-nums" style={{ color: '#10b981' }}>${totalEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+          <p className="text-2xl font-bold tabular-nums" style={{ color: '#10b981' }}>${totalEarned.toLocaleString('en-US')}</p>
           <p className="text-[10px]" style={{ color: '#bbb' }}>from bonuses</p>
         </div>
 
@@ -132,7 +177,7 @@ export default function BonusPage() {
                     <p className="text-xs font-medium" style={{ color: '#1a1a1a' }}>Deposit Bonus</p>
                     <p className="text-[10px]" style={{ color: '#999' }}>{new Date(tx.date).toLocaleDateString()}</p>
                   </div>
-                  <p className="text-xs font-semibold tabular-nums" style={{ color: '#10b981' }}>+${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-xs font-semibold tabular-nums" style={{ color: '#10b981' }}>+${tx.amount.toLocaleString('en-US')}</p>
                 </div>
               ))}
             </div>

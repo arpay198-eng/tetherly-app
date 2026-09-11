@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { getAuth } from '@/lib/auth';
-
-export const dynamic = 'force-dynamic';
+import {
+  getCached,
+  setCached,
+  getFallback,
+  invalidateCache,
+  getTransactionsList,
+  saveTransactionRecord,
+} from '@/lib/apiCache';
 
 export async function POST(request: Request) {
   try {
@@ -65,7 +71,13 @@ export async function POST(request: Request) {
       date: date || new Date().toISOString(),
     };
     if (hash) data.hash = hash;
-    await txRef.set(data, { merge: true });
+    try {
+      await txRef.set(data, { merge: true });
+    } catch (err: any) {
+      console.warn('txRef.set error (using cache):', err?.message);
+    }
+    saveTransactionRecord(data);
+    invalidateCache('transactions:');
 
     return NextResponse.json({ success: true, id });
   } catch (error) {
@@ -75,19 +87,28 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get('userId');
+  const type = searchParams.get('type');
+  const status = searchParams.get('status');
+  let cacheKey = 'transactions:all:all:all';
+  let targetUserId: string | null = null;
+
   try {
     const auth = getAuth(request);
     if (!auth) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    const type = searchParams.get('type');
-    const status = searchParams.get('status');
+    targetUserId = !auth.isAdmin ? String(auth.id) : userId ? String(userId) : null;
+    cacheKey = `transactions:${targetUserId || 'all'}:${type || 'all'}:${status || 'all'}`;
+
+    const cached = getCached<any[]>(cacheKey, 8000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
 
     const adminDb = getAdminDb();
-    const targetUserId = !auth.isAdmin ? String(auth.id) : userId ? String(userId) : null;
     const transactions: any[] = [];
 
     if (targetUserId) {
@@ -110,9 +131,11 @@ export async function GET(request: Request) {
       });
     }
 
+    setCached(cacheKey, transactions);
     return NextResponse.json(transactions);
   } catch (error) {
-    console.error('API transactions GET error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('API transactions GET error, returning persistent cache:', error);
+    const fallbackList = getTransactionsList(targetUserId, type, status);
+    return NextResponse.json(fallbackList);
   }
 }

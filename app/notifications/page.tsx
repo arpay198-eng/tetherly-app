@@ -7,7 +7,11 @@ import MobileNav from '@/components/layout/MobileNav';
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const { isLoggedIn, notifications, markNotificationRead, markAllRead, loadNotifications } = useStore();
+  const isLoggedIn = useStore((s) => s.isLoggedIn);
+  const notifications = useStore((s) => s.notifications);
+  const markNotificationRead = useStore((s) => s.markNotificationRead);
+  const markAllRead = useStore((s) => s.markAllRead);
+  const loadNotifications = useStore((s) => s.loadNotifications);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -23,7 +27,8 @@ export default function NotificationsPage() {
 
   if (!isLoggedIn) return null;
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const sortedNotifications = [...notifications].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+  const unreadCount = sortedNotifications.filter((n) => !n.read).length;
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -86,7 +91,7 @@ export default function NotificationsPage() {
         </div>
 
         {unreadCount > 0 && (
-          <div className="mb-4 text-xs" style={{ color: '#999' }}>{unreadCount} unread notification{unreadCount > 1 ? 's' : ''}</div>
+          <div className="mb-4 text-xs font-semibold" style={{ color: '#999' }}>{unreadCount} unread notification{unreadCount > 1 ? 's' : ''}</div>
         )}
 
         {notifications.length === 0 ? (
@@ -99,7 +104,7 @@ export default function NotificationsPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {notifications.map((n) => (
+            {sortedNotifications.map((n) => (
               <div
                 key={n.id}
                 onClick={() => markNotificationRead(n.id)}
@@ -114,7 +119,7 @@ export default function NotificationsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-sm font-medium truncate" style={{ color: '#1a1a1a' }}>{n.title}</p>
+                    <p className="text-sm font-semibold truncate" style={{ color: '#1a1a1a' }}>{n.title}</p>
                     {!n.read && (
                       <div className="w-1.5 h-1.5 rounded-full flex-none" style={{ background: '#10b981' }} />
                     )}

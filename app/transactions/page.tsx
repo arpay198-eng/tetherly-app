@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
-import { apiGet } from '@/lib/firebaseService';
 import MobileNav from '@/components/layout/MobileNav';
 
 export default function TransactionsPage() {
   const router = useRouter();
-  const { isLoggedIn, transactions, user, refreshUser } = useStore();
+  const isLoggedIn = useStore((s) => s.isLoggedIn);
+  const transactions = useStore((s) => s.transactions);
+  const user = useStore((s) => s.user);
+  const refreshUser = useStore((s) => s.refreshUser);
   const [filter, setFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'bonus'>('all');
 
   useEffect(() => {
@@ -23,7 +25,8 @@ export default function TransactionsPage() {
   if (!isLoggedIn) return null;
 
   const txList = transactions || [];
-  const filtered = filter === 'all' ? txList : txList.filter((tx) => tx.type === filter);
+  const filtered = (filter === 'all' ? txList : txList.filter((tx) => tx.type === filter))
+    .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -134,7 +137,7 @@ export default function TransactionsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px]" style={{ color: '#999' }}>
+                  <p className="text-[11px] font-medium" style={{ color: '#999' }}>
                     {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </p>
                   {tx.rejectReason && tx.status === 'failed' && (
@@ -145,9 +148,9 @@ export default function TransactionsPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold tabular-nums" style={{ color: tx.amount >= 0 ? '#10b981' : '#f87171' }}>
-                    {tx.amount >= 0 ? '+' : ''}{Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {tx.amount >= 0 ? '+' : ''}{Math.abs(tx.amount).toLocaleString('en-US')}
                   </p>
-                  <p className="text-[10px] capitalize font-medium" style={{ color: getStatusColor(tx.status) }}>
+                  <p className="text-[10px] capitalize font-bold" style={{ color: getStatusColor(tx.status) }}>
                     {tx.status === 'failed' ? 'Rejected' : tx.status}
                   </p>
                 </div>

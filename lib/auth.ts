@@ -32,6 +32,8 @@ export function verifyToken(token?: string | null): AuthPayload | null {
     if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
     const expNum = Number(exp);
     if (!expNum || Date.now() >= expNum) return null;
+    // Sanitize: ensure id and email are non-empty strings
+    if (!id || !email) return null;
     return { id, email, isAdmin: isAdminRaw === 'true', exp: expNum };
   } catch {
     return null;
@@ -42,4 +44,26 @@ export function getAuth(request: Request): AuthPayload | null {
   const header = request.headers.get('authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : header;
   return verifyToken(token);
+}
+
+// Server-side: verify user actually exists in Firestore and is not blocked.
+// Prevents forged tokens from granting access after account deletion/block.
+export async function getVerifiedAuth(request: Request): Promise<AuthPayload | null> {
+  const auth = getAuth(request);
+  if (!auth) return null;
+  try {
+    const { getAdminDb } = await import('./firebaseAdmin');
+    const adminDb = getAdminDb();
+    const userSnap = await adminDb.collection('users').doc(auth.id).get();
+    if (!userSnap.exists) return null;
+    const userData = userSnap.data()!;
+    if (userData.status === 'blocked') return null;
+    // If token isAdmin but DB is not, downgrade
+    if (auth.isAdmin && !userData.isAdmin) {
+      return { ...auth, isAdmin: false };
+    }
+    return auth;
+  } catch {
+    return auth; // Fallback: trust token if Firestore unreachable
+  }
 }

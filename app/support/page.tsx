@@ -77,7 +77,8 @@ export default function SupportPage() {
 
   if (!isLoggedIn) return null;
 
-  const filteredTickets = filter === 'all' ? tickets : tickets.filter((t) => t.status === filter);
+  const filteredTickets = (filter === 'all' ? tickets : tickets.filter((t) => t.status === filter))
+    .sort((a, b) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
 
   const handleSubmitTicket = async (e: React.FormEvent) => {
     e.preventDefault();

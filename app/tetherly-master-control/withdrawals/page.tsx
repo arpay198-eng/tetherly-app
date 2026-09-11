@@ -43,7 +43,7 @@ export default function AdminWithdrawalsPage() {
       }
     }
     load()
-    const interval = setInterval(load, 3000)
+    const interval = setInterval(load, 12000)
     return () => { alive = false; clearInterval(interval) }
   }, [])
 
@@ -109,7 +109,7 @@ export default function AdminWithdrawalsPage() {
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs font-medium text-slate-500 mt-1">
             Review destination wallet addresses, broadcast transaction hashes, and approve on-chain USDT payouts.
           </p>
         </div>

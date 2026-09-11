@@ -1,5 +1,3 @@
-﻿export const dynamic = 'force-dynamic';
-
 import { NextResponse } from 'next/server';
 import { runAutoVerify } from '@/lib/autoVerifyCore';
 import { getAuth } from '@/lib/auth';

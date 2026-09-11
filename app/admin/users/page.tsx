@@ -1,10 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useStore, AdminUserItem } from '@/store/useStore'
 
 export default function AdminUsersPage() {
-  const { allUsers, creditUser, debitUser, toggleUserStatus } = useStore()
+  const router = useRouter()
+  const { isLoggedIn, allUsers, creditUser, debitUser, toggleUserStatus } = useStore()
+
+  useEffect(() => {
+    if (!isLoggedIn) router.replace('/auth/login')
+  }, [isLoggedIn, router])
   const [search, setSearch] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
@@ -348,7 +354,7 @@ export default function AdminUsersPage() {
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
                   className="w-full pl-4 pr-16 py-3 text-sm font-bold rounded-xl border border-slate-200 outline-none focus:border-emerald-500"
-                  placeholder="0.00"
+                  placeholder="0"
                   min="0"
                 />
                 <span className="absolute right-3.5 top-3.5 text-xs font-bold text-slate-400">

@@ -1,32 +1,58 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import MobileNav from '@/components/layout/MobileNav';
+import { getAuthToken } from '@/lib/firebaseService';
+
+interface DepositHistory {
+  deposits: any[];
+  pagination: { page: number; limit: number; hasMore: boolean; total: number };
+  summary: { totalDeposited: number; completedCount: number; pendingCount: number; failedCount: number };
+}
 
 export default function DepositPage() {
   const router = useRouter();
-  const { isLoggedIn, deposit, refreshUser } = useStore();
+  const isLoggedIn = useStore((s) => s.isLoggedIn);
+  const deposit = useStore((s) => s.deposit);
+  const refreshUser = useStore((s) => s.refreshUser);
   const rawTx = useStore((s) => s.transactions) || [];
   const network: 'BEP20' = 'BEP20';
   const [amount, setAmount] = useState('');
   const [txHash, setTxHash] = useState('');
   const [filterTab, setFilterTab] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<DepositHistory | null>(null);
 
   // Status States
   const [verifyState, setVerifyState] = useState<'idle' | 'verified' | 'error'>('idle');
   const [verifyMsg, setVerifyMsg] = useState('');
+  const [step, setStep] = useState<'form' | 'success'>('form');
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/deposits/history?limit=50', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data);
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!isLoggedIn) router.replace('/auth/login');
     void refreshUser();
+    void fetchHistory();
     const interval = setInterval(() => {
       void refreshUser();
+      void fetchHistory();
     }, 5000);
     return () => clearInterval(interval);
-  }, [isLoggedIn, router, refreshUser]);
+  }, [isLoggedIn, router, refreshUser, fetchHistory]);
 
   if (!isLoggedIn) return null;
 
@@ -52,36 +78,42 @@ export default function DepositPage() {
     const val = parseFloat(amount);
     if (!val || val <= 0) {
       setVerifyState('error');
-      setVerifyMsg('Please enter a valid amount (minimum 1 USDT).');
+      setVerifyMsg('Enter a valid amount (min 1 USDT).');
       return;
     }
 
     const trimmedHash = txHash.trim();
     if (!trimmedHash) {
       setVerifyState('error');
-      setVerifyMsg('Transaction Hash (TxID) is required. Paste your BSC transaction hash.');
+      setVerifyMsg('Paste your BSC transaction hash from your wallet.');
       return;
     }
     if (!BSC_TX_HASH_RE.test(trimmedHash)) {
       setVerifyState('error');
-      setVerifyMsg('Invalid TxID format. Must be a 66-character BSC hash starting with 0x (e.g. 0xabc...).');
+      setVerifyMsg('Invalid hash format. Must be 0x followed by 64 characters.');
       return;
     }
 
     try {
       const depositReq = await deposit(val, network, trimmedHash);
       if (depositReq) {
-        setVerifyState('verified');
-        setVerifyMsg(`Deposit request of ${val} USDT submitted! Your request has been queued for verification.`);
+        setStep('success');
         setAmount('');
         setTxHash('');
       } else {
         setVerifyState('error');
-        setVerifyMsg('Server rejected the deposit. Please re-login and try again. If it persists, contact support.');
+        setVerifyMsg('Deposit failed. Please check your details and try again.');
       }
     } catch (err: any) {
       setVerifyState('error');
-      setVerifyMsg(err?.message || 'Error submitting deposit. Please try again.');
+      const msg = err?.message || '';
+      if (msg.includes('already been submitted')) {
+        setVerifyMsg('This transaction hash was already used. Use a new hash from your wallet.');
+      } else if (msg.includes('Invalid TxID')) {
+        setVerifyMsg('Invalid hash format. Must be 0x followed by 64 characters.');
+      } else {
+        setVerifyMsg('Something went wrong. Please try again.');
+      }
     }
   };
 
@@ -91,6 +123,24 @@ export default function DepositPage() {
   const txHashValid = BSC_TX_HASH_RE.test(txHash.trim());
     const canSubmit = amount && parseFloat(amount) > 0 && txHashValid;
 
+  const formatAmount = (n: number) => n.toLocaleString('en-US');
+  const depositedAmount = parseFloat(amount) || 0;
+
+  if (step === 'success') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: '#f3f5f7' }}>
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(16,185,129,0.1)' }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h2 className="text-xl font-bold mb-2" style={{ color: '#1a1a1a' }}>Deposit Submitted</h2>
+        <p className="text-sm text-center mb-6" style={{ color: '#888' }}>Your deposit is being verified. Balance will update shortly.</p>
+        <button onClick={() => setStep('form')} className="w-full max-w-xs py-3 rounded-xl text-white font-semibold text-sm btn-premium">
+          Back to Deposit
+        </button>
+      </div>
+    );
+  }
+
     return (
     <div className="min-h-screen pb-28" style={{ background: '#f3f5f7' }}>
       <div className="px-5 pt-5 pb-6">
@@ -98,29 +148,31 @@ export default function DepositPage() {
 
         {/* Deposit Status Banners */}
         {verifyState === 'verified' && (
-          <div className="mb-5 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-3 shadow-sm">
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center shrink-0 shadow-sm shadow-emerald-600/25">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <div className="mb-5 p-4 rounded-2xl flex items-center gap-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', border: '1px solid #a7f3d0' }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#10b981', boxShadow: '0 4px 12px rgba(16,185,129,0.3)' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
             <div>
-              <p className="font-bold text-emerald-900">✓ Deposit Request Queued</p>
-              <p className="text-[11px] text-emerald-700 mt-0.5">{verifyMsg}</p>
+              <p className="font-bold text-xs" style={{ color: '#065f46' }}>Deposit Submitted!</p>
+              <p className="text-[11px] mt-0.5" style={{ color: '#047857' }}>{verifyMsg}</p>
             </div>
           </div>
         )}
 
         {verifyState === 'error' && (
-          <div className="mb-5 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs font-medium flex items-center gap-3 shadow-sm">
-            <svg className="shrink-0" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="15" y1="9" x2="9" y2="15" />
-              <line x1="9" y1="9" x2="15" y2="15" />
-            </svg>
+          <div className="mb-5 p-4 rounded-2xl flex items-center gap-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #fff1f2, #ffe4e6)', border: '1px solid #fecdd3' }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#f43f5e', boxShadow: '0 4px 12px rgba(244,63,94,0.3)' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
             <div>
-              <p className="font-bold text-red-900">Deposit Error</p>
-              <p className="text-[11px] text-red-700 mt-0.5">{verifyMsg}</p>
+              <p className="font-bold text-xs" style={{ color: '#9f1239' }}>Something went wrong</p>
+              <p className="text-[11px] mt-0.5" style={{ color: '#be123c' }}>{verifyMsg}</p>
             </div>
           </div>
         )}
@@ -130,13 +182,13 @@ export default function DepositPage() {
             {depositAddress ? (
               <>
                 <div className="mb-3 px-3 py-1.5 rounded-full text-xs font-bold" style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706', border: '1px solid rgba(245,158,11,0.25)' }}>
-                  BSC (Binance Smart Chain)
+                  BEP20 (Binance Smart Chain)
                 </div>
                 <div className="w-40 h-40 rounded-xl flex items-center justify-center mb-3 overflow-hidden" style={{ background: '#fff', border: '1px solid #f0f0f0' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/deposit-qr.jpeg" alt="BSC USDT Deposit Address QR Code" className="w-40 h-40 object-contain" />
                 </div>
-                <p className="text-xs mb-1" style={{ color: '#999' }}>BSC USDT Deposit Address</p>
+                <p className="text-xs font-semibold mb-1" style={{ color: '#999' }}>BSC USDT Deposit Address</p>
               </>
             ) : (
               <div className="text-center py-6 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
@@ -160,7 +212,7 @@ export default function DepositPage() {
           )}
 
           <div className="mb-4">
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Quick Amount</label>
+            <label className="block text-xs font-semibold mb-1.5" style={{ color: '#888' }}>Quick Amount</label>
             <div className="grid grid-cols-4 gap-2">
               {quickAmounts.map((a) => (
                 <button
@@ -180,7 +232,7 @@ export default function DepositPage() {
           </div>
 
           <div className="mb-4">
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Amount (USDT)</label>
+            <label className="block text-xs font-semibold mb-1.5" style={{ color: '#888' }}>Amount (USDT)</label>
             <input
               type="number"
               min="0"
@@ -193,7 +245,7 @@ export default function DepositPage() {
           </div>
 
           <div className="mb-4">
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>
+            <label className="block text-xs font-semibold mb-1.5" style={{ color: '#888' }}>
               Transaction Hash / TxID
             </label>
             <input
@@ -204,7 +256,7 @@ export default function DepositPage() {
               className="w-full px-4 py-3 rounded-xl text-xs font-mono input-premium"
               style={{ color: '#1a1a1a' }}
             />
-            <span className="text-[10px] text-slate-400 mt-1 block">
+            <span className="text-[10px] font-medium text-slate-400 mt-1 block">
               Required. Paste the transaction hash from your BSC wallet after sending USDT.
             </span>
           </div>
@@ -222,6 +274,28 @@ export default function DepositPage() {
           >
             Submit Deposit for Verification
           </button>
+        </div>
+
+        <div className="rounded-2xl p-4 card-premium mb-5">
+          <p className="text-sm font-semibold mb-3" style={{ color: '#1a1a1a' }}>Deposit Summary</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl" style={{ background: '#f0fdf4' }}>
+              <p className="text-[10px] font-semibold" style={{ color: '#16a34a' }}>Total Deposited</p>
+              <p className="text-lg font-bold tabular-nums" style={{ color: '#15803d' }}>${(history?.summary.totalDeposited || 0).toLocaleString('en-US')}</p>
+            </div>
+            <div className="p-3 rounded-xl" style={{ background: '#eff6ff' }}>
+              <p className="text-[10px] font-semibold" style={{ color: '#2563eb' }}>Completed</p>
+              <p className="text-lg font-bold" style={{ color: '#1d4ed8' }}>{history?.summary.completedCount || 0}</p>
+            </div>
+            <div className="p-3 rounded-xl" style={{ background: '#fffbeb' }}>
+              <p className="text-[10px] font-semibold" style={{ color: '#d97706' }}>Pending</p>
+              <p className="text-lg font-bold" style={{ color: '#b45309' }}>{history?.summary.pendingCount || 0}</p>
+            </div>
+            <div className="p-3 rounded-xl" style={{ background: '#fef2f2' }}>
+              <p className="text-[10px] font-semibold" style={{ color: '#dc2626' }}>Failed/Rejected</p>
+              <p className="text-lg font-bold" style={{ color: '#b91c1c' }}>{history?.summary.failedCount || 0}</p>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-2xl p-4 card-premium">
@@ -256,6 +330,9 @@ export default function DepositPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium" style={{ color: '#1a1a1a' }}>Deposit ({tx.network})</p>
                     <p className="text-[10px]" style={{ color: '#999' }}>{new Date(tx.date).toLocaleDateString()}</p>
+                    {tx.status === 'pending' && (
+                      <p className="text-[10px]" style={{ color: '#f59e0b' }}>Verifying on blockchain...</p>
+                    )}
                     {tx.rejectReason && tx.status === 'failed' && (
                       <p className="text-[10px] text-red-500 truncate" title={tx.rejectReason}>
                         Reason: {tx.rejectReason}
@@ -263,7 +340,7 @@ export default function DepositPage() {
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-semibold tabular-nums" style={{ color: '#10b981' }}>+${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-xs font-semibold tabular-nums" style={{ color: '#10b981' }}>+${tx.amount.toLocaleString('en-US')}</p>
                     <p
                       className="text-[10px] font-bold capitalize"
                       style={{

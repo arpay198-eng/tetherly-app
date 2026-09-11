@@ -12,6 +12,10 @@ server*.log
 # Secrets — NEVER commit
 firebase-service-account.json
 
+# Cache files with user data
+data/cache-snapshot.json
+data/
+
 # Env files
 .env
 .env.*
@@ -30,3 +34,4 @@ android/app/build/
 next-env.d.ts
 .vscode/
 .idea/
+.vercel

@@ -37,7 +37,7 @@ async function tick() {
   );
 }
 
-export function startAutoVerifyScheduler(intervalMs = 15000) {
+export function startAutoVerifyScheduler(intervalMs = 45000) {
   if (started) return;
   started = true;
   log(`scheduler started (every ${intervalMs}ms)`);

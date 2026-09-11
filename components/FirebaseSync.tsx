@@ -104,7 +104,7 @@ export default function FirebaseSync() {
     };
 
     void sync();
-    const interval = setInterval(sync, 5000);
+    const interval = setInterval(sync, 15000);
 
     return () => {
       alive = false;

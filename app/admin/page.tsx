@@ -1,13 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useStore, AdminUserItem } from '@/store/useStore'
 
 export default function AdminPage() {
   const router = useRouter()
-  const { allUsers, withdrawalRequests, transactions, updateUserBalance, creditUser, debitUser, approveWithdrawal, toggleUserStatus } = useStore()
+  const { isLoggedIn, allUsers, withdrawalRequests, transactions, updateUserBalance, creditUser, debitUser, approveWithdrawal, toggleUserStatus } = useStore()
+
+  useEffect(() => {
+    if (!isLoggedIn) router.replace('/auth/login')
+  }, [isLoggedIn, router])
 
   // Quick adjust modal state
   const [showQuickCreditModal, setShowQuickCreditModal] = useState(false)
@@ -247,7 +251,7 @@ export default function AdminPage() {
           </div>
           <div>
             <h2 className="text-2xl font-black tracking-tight text-white tabular-nums">
-              ${platformReserves.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+              ${platformReserves.toLocaleString('en-US')}{' '}
               <span className="text-xs font-bold text-emerald-400">USDT</span>
             </h2>
             <p className="text-[11px] text-slate-400 mt-1">

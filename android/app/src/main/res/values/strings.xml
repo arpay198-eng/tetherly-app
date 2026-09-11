@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Tetherly</string>
-    <string name="title_activity_main">Tetherly</string>
-    <string name="package_name">com.tetherly.app</string>
-    <string name="custom_url_scheme">com.tetherly.app</string>
-</resources>

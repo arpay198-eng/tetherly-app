@@ -100,7 +100,7 @@ export default function RegisterPage() {
 
           <form onSubmit={handleRegister} className="flex flex-col gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Full Name</label>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: '#888' }}>Full Name</label>
               <input
                 type="text"
                 value={name}
@@ -111,7 +111,7 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Email</label>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: '#888' }}>Email</label>
               <input
                 type="email"
                 value={email}
@@ -122,7 +122,7 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Password</label>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: '#888' }}>Password</label>
               <input
                 type="password"
                 value={password}
@@ -133,7 +133,7 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Referral Code <span style={{ color: '#bbb' }}>(optional)</span></label>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: '#888' }}>Referral Code <span style={{ color: '#bbb' }}>(optional)</span></label>
               <input
                 type="text"
                 value={referral}

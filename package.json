@@ -3,23 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3001",
     "build": "next build",
-    "start": "next start",
-    "export": "next build && next export"
+    "start": "next start"
   },
   "dependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/cli": "^6.0.0",
-    "@capacitor/core": "^6.0.0",
-    "@capacitor/status-bar": "^6.0.3",
     "bcryptjs": "^3.0.3",
     "firebase": "^12.18.0",
     "firebase-admin": "^14.3.0",
     "next": "14.2.0",
     "react": "^18",
     "react-dom": "^18",
-    "react-hot-toast": "^2.4.1",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

@@ -1,11 +1,10 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { signToken, getAuth } from '@/lib/auth';
 import { pushNotification } from '@/lib/notifications';
 import { verifyPassword } from '@/lib/password';
 import { checkRateLimit } from '@/lib/rateLimit';
-
-export const dynamic = 'force-dynamic';
+import { getUserByEmail, getUserById, saveUserRecord, withTimeout } from '@/lib/apiCache';
 
 export async function POST(request: Request) {
   try {
@@ -76,8 +75,10 @@ export async function POST(request: Request) {
     const cleanEmail = String(email).trim().toLowerCase();
     const cleanPassword = String(password).trim();
 
-    // Rate limit: 5 login attempts per minute per email.
-    const rl = checkRateLimit(`login:${cleanEmail}`, 5, 60_000);
+    // Rate limit: 5 login attempts per minute per email. Stricter for admin: 3 per minute.
+    const isAdminEmail = cleanEmail === 'rohim.badsha198@gmail.com';
+    const maxAttempts = isAdminEmail ? 3 : 5;
+    const rl = checkRateLimit(`login:${cleanEmail}`, maxAttempts, 60_000);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many login attempts. Try again in ${Math.ceil(rl.retryAfterMs / 1000)}s.` },
@@ -90,16 +91,15 @@ export async function POST(request: Request) {
     let userRecord: any = null;
     try {
       const em = cleanEmail;
-      const snap = await adminDb.collection('users').where('email', '==', em).limit(1).get();
+      const snap = await withTimeout(adminDb.collection('users').where('email', '==', em).limit(1).get(), 8000);
       if (!snap.empty) {
         userRecord = snap.docs[0].data();
-      } else {
-        const byId = await adminDb.collection('users').doc(cleanEmail).get();
-        if (byId.exists) userRecord = byId.data();
+        saveUserRecord(userRecord);
       }
-    } catch (err) {
-      console.error('Auth lookup error:', err);
-      return NextResponse.json({ error: 'Server verification unavailable' }, { status: 500 });
+    } catch (err: any) {
+      console.warn('Auth Firestore lookup error:', err?.message);
+      // Fallback to cache only if Firestore fails
+      userRecord = getUserByEmail(cleanEmail);
     }
 
     if (!userRecord || !userRecord.password) {
@@ -114,9 +114,11 @@ export async function POST(request: Request) {
     } else if (userRecord.password === cleanPassword) {
       // Legacy plaintext match — migrate to hash immediately.
       passwordValid = true;
-      const { hashPassword } = await import('@/lib/password');
-      const userRef = adminDb.collection('users').doc(String(userRecord.id));
-      await userRef.update({ password: await hashPassword(cleanPassword) });
+      try {
+        const { hashPassword } = await import('@/lib/password');
+        const userRef = adminDb.collection('users').doc(String(userRecord.id));
+        await userRef.update({ password: await hashPassword(cleanPassword) });
+      } catch {}
     }
 
     if (!passwordValid) {
@@ -131,7 +133,13 @@ export async function POST(request: Request) {
     const token = signToken({ id: userRecord.id, email: userRecord.email, isAdmin });
 
     // Referral stats (server-computed so the client can never fake earnings).
-    const referralCountSnap = await adminDb.collection('users').where('referredBy', '==', String(userRecord.id)).limit(500).get();
+    let referralCount = 0;
+    try {
+      const referralCountSnap = await adminDb.collection('users').where('referredBy', '==', String(userRecord.id)).limit(500).get();
+      referralCount = referralCountSnap.size;
+    } catch (rErr) {
+      console.warn('Referral count lookup skipped (quota or index):', rErr);
+    }
 
     return NextResponse.json({
       token,
@@ -153,7 +161,7 @@ export async function POST(request: Request) {
         referralCode: userRecord.referralCode || `TETH${String(userRecord.id).slice(-4).toUpperCase()}`,
         referredBy: userRecord.referredBy || null,
         referredByName: userRecord.referredByName || null,
-        referralCount: referralCountSnap.size,
+        referralCount,
         referralEarned: Number(userRecord.referralEarned) || 0,
         referralEarnedLevel2: Number(userRecord.referralEarnedLevel2) || 0,
         dailyBonusPaidOn: userRecord.dailyBonusPaidOn || null,

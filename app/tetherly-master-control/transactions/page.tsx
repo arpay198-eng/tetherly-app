@@ -57,9 +57,10 @@ export default function AdminTransactionsPage() {
     }
   }
 
-  const filtered = filter === 'all'
+  const filtered = (filter === 'all'
     ? transactions
     : transactions.filter((t) => t.type === filter)
+  ).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
 
   const totalIn = transactions.filter((t) => t.type === 'deposit').reduce((s, t) => s + t.amount, 0)
   const totalOut = transactions.filter((t) => t.type === 'withdrawal' && t.status === 'completed').reduce((s, t) => s + Math.abs(t.amount), 0)
@@ -75,7 +76,7 @@ export default function AdminTransactionsPage() {
               {transactions.length} Total Records
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs font-medium text-slate-500 mt-1">
             Immutable audit trail of all deposits, payout disbursements, daily rewards, and referral commissions.
           </p>
         </div>
