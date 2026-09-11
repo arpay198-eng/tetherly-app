@@ -284,7 +284,7 @@ export default function DashboardPage() {
                 >
                   {canClaim
                     ? `Claim $${formatAmount(totalPendingBonus > 0 ? totalPendingBonus : bonusPerClaim)}${pendingClaims > 1 ? ` · ${pendingClaims} claims` : ''}`
-                    : `Next claim in ${String(countdown.h).padStart(2, '0')}:${String(countdown.m).padStart(2, '0')}:${String(countdown.s).padStart(2, '0')}`
+                    : 'Claim Bonus'
                   }
                 </button>
               </>
