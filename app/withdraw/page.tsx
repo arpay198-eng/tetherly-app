@@ -56,7 +56,7 @@ export default function WithdrawPage() {
 
   // The admin (operator) is exempt from the 24h deposit lock.
   const isAdmin = !!user?.isAdmin;
-  const locked = lockMs > 0 && !isAdmin;
+  const locked = lockMs > 0 && !isAdmin && walletType === 'deposit';
   const lockH = Math.floor(lockMs / 3600000);
   const lockM = Math.floor((lockMs % 3600000) / 60000);
   const lockS = Math.floor((lockMs % 60000) / 1000);
@@ -346,6 +346,19 @@ export default function WithdrawPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate" style={{ color: '#1a1a1a' }}>Withdrawal ({tx.network || 'BEP20'})</p>
                     <p className="text-[10px]" style={{ color: '#999' }}>{new Date(tx.date).toLocaleDateString()}</p>
+                    {tx.hash && tx.status === 'completed' && !tx.hash.startsWith('TX_') && !tx.hash.startsWith('0x_wd_') && !tx.hash.startsWith('ADMIN_DEBIT_') && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono truncate max-w-[120px]" title={tx.hash}>
+                          TxID: {tx.hash}
+                        </span>
+                        <button 
+                          onClick={() => navigator.clipboard.writeText(tx.hash!)}
+                          className="text-[9px] text-emerald-600 font-bold hover:underline"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    )}
                     {tx.rejectReason && tx.status === 'failed' && (
                       <p className="text-[10px] text-red-500 truncate" title={tx.rejectReason}>
                         Reason: {tx.rejectReason} (Refunded)

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useStore } from '@/store/useStore';
 import MobileNav from '@/components/layout/MobileNav';
+import { Gift } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -88,7 +89,7 @@ export default function DashboardPage() {
       case 'withdrawal':
         return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>;
       case 'bonus':
-        return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>;
+        return <Gift size={18} color="#8b5cf6" strokeWidth={2.5} />;
       case 'referral':
         return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
       default:
@@ -211,9 +212,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#f5f3ff' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
-                  </svg>
+                  <Gift size={16} color="#8b5cf6" strokeWidth={2.5} />
                 </div>
                 <div>
                   <p className="text-sm font-bold" style={{ color: '#1a1a1a' }}>Daily Bonus</p>
@@ -284,7 +283,7 @@ export default function DashboardPage() {
                 >
                   {canClaim
                     ? `Claim $${formatAmount(totalPendingBonus > 0 ? totalPendingBonus : bonusPerClaim)}${pendingClaims > 1 ? ` · ${pendingClaims} claims` : ''}`
-                    : 'Claim Bonus'
+                    : `Next claim in ${String(countdown.h).padStart(2, '0')}:${String(countdown.m).padStart(2, '0')}:${String(countdown.s).padStart(2, '0')}`
                   }
                 </button>
               </>
@@ -320,6 +319,13 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate" style={{ color: '#1a1a1a' }}>{tx.type.charAt(0).toUpperCase() + tx.type.slice(1)}</p>
                     <p className="text-[10px] font-medium" style={{ color: '#999' }}>{new Date(tx.date).toLocaleDateString()}</p>
+                    {tx.hash && tx.status === 'completed' && !tx.hash.startsWith('TX_') && !tx.hash.startsWith('0x_wd_') && !tx.hash.startsWith('ADMIN_DEBIT_') && !tx.hash.startsWith('ADMIN_CREDIT_') && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono truncate max-w-[120px]" title={tx.hash}>
+                          TxID: {tx.hash}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold tabular-nums" style={{ color: tx.amount >= 0 ? '#10b981' : '#f87171' }}>

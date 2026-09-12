@@ -169,6 +169,7 @@ export async function POST(request: Request) {
     if (lastDepositAmount !== undefined) data.lastDepositAmount = lastDepositAmount;
     if (bonusClaimed !== undefined) data.bonusClaimed = bonusClaimed;
     if (depositBalance !== undefined) data.depositBalance = depositBalance;
+    if (body.bonusBalance !== undefined) data.bonusBalance = body.bonusBalance;
     if (referredBy !== undefined) data.referredBy = referredBy;
 
     // Guard admin edits against wiring up a referral cycle.

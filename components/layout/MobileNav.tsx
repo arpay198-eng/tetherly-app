@@ -3,60 +3,33 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
+import { Home, ArrowDownToLine, Gift, Send, User } from 'lucide-react';
+
 const navItems = [
   {
     label: 'Home',
     href: '/dashboard',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M3 10.5L12 3L21 10.5V20C21 20.55 20.55 21 20 21H15V15H9V21H4C3.45 21 3 20.55 3 20V10.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M9 15H15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-      </svg>
-    ),
+    icon: <Home size={22} strokeWidth={2.5} />,
   },
   {
     label: 'Deposit',
     href: '/deposit',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="3" y="6" width="18" height="14" rx="3" stroke="currentColor" strokeWidth="1.8"/>
-        <path d="M3 11H21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-        <path d="M12 15V18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-        <path d="M9 16.5H15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-        <circle cx="12" cy="9" r="1.5" fill="currentColor"/>
-      </svg>
-    ),
+    icon: <ArrowDownToLine size={22} strokeWidth={2.5} />,
   },
   {
     label: 'Bonus',
     href: '/bonus',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2L14.5 8.5L21.5 9.5L16.5 14L18 21L12 17.5L6 21L7.5 14L2.5 9.5L9.5 8.5L12 2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2"/>
-      </svg>
-    ),
+    icon: <Gift size={22} strokeWidth={2.5} />,
   },
   {
     label: 'Withdraw',
     href: '/withdraw',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/>
-        <path d="M12 8V16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-        <path d="M8.5 12.5L12 16L15.5 12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
+    icon: <Send size={22} strokeWidth={2.5} />,
   },
   {
     label: 'Profile',
     href: '/settings/profile',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8"/>
-        <path d="M5 20C5 17.24 7.24 15 10 15H14C16.76 15 19 17.24 19 20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-      </svg>
-    ),
+    icon: <User size={22} strokeWidth={2.5} />,
   },
 ];
 

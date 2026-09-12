@@ -46,10 +46,11 @@ export async function POST(request: Request) {
     const txUserId = auth.isAdmin ? (body.userId || auth.id) : auth.id;
 
     const adminDb = getAdminDb();
-    let txRef = adminDb.collection('transactions').doc();
-    let id = txRef.id;
+    let id = body.id;
+    let txRef = id ? adminDb.collection('transactions').doc(String(id)) : adminDb.collection('transactions').doc();
+    if (!id) id = txRef.id;
 
-    if (hash) {
+    if (!body.id && hash) {
       const existingSnap = await adminDb.collection('transactions')
         .where('userId', '==', String(txUserId))
         .where('hash', '==', String(hash))

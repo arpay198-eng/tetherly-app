@@ -11,6 +11,8 @@ export default function AdminWithdrawalsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'completed' | 'rejected'>('all')
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [approvingId, setApprovingId] = useState<string | null>(null)
+  const [approveHash, setApproveHash] = useState('')
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null)
 
   const [authError, setAuthError] = useState(false)
@@ -68,6 +70,12 @@ export default function AdminWithdrawalsPage() {
     rejectWithdrawal(id, rejectReason || 'Address or KYC verification failed')
     setRejectingId(null)
     setRejectReason('')
+  }
+
+  const handleConfirmApprove = (id: string) => {
+    approveWithdrawal(id, approveHash.trim() || undefined)
+    setApprovingId(null)
+    setApproveHash('')
   }
 
   const safeRequests = withdrawalRequests || []
@@ -265,7 +273,7 @@ className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs
                       {req.status === 'pending' ? (
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => approveWithdrawal(req.id)}
+                            onClick={() => setApprovingId(req.id)}
                             className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all active:scale-95 cursor-pointer shadow-md shadow-emerald-600/20"
                           >
                             ✓ Approve
@@ -288,6 +296,40 @@ className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs
           </table>
         </div>
       </div>
+
+      {/* Approve Confirmation Modal */}
+      {approvingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(6px)' }}>
+          <div className="w-full max-w-sm rounded-3xl p-6 bg-white shadow-2xl border border-slate-100">
+            <h3 className="text-base font-bold text-slate-900 mb-1">Approve Withdrawal?</h3>
+            <p className="text-xs text-slate-500 mb-4">You can optionally provide the blockchain Transaction ID (TxID) to help the user track their payment.</p>
+            <input
+              type="text"
+              placeholder="Transaction ID (TxID) - Optional"
+              value={approveHash}
+              onChange={(e) => setApproveHash(e.target.value)}
+              className="w-full px-4 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-emerald-500 shadow-sm mb-5"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setApprovingId(null)
+                  setApproveHash('')
+                }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleConfirmApprove(approvingId)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 transition-all active:scale-95"
+              >
+                Confirm Approval
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reject Confirmation Modal */}
       {rejectingId && (

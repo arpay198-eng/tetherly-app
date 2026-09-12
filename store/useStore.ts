@@ -459,12 +459,17 @@ export const useStore = create<AppState>()(
     set({
       wallet: {
         ...wallet,
-        balance: updated.balance !== undefined ? updated.balance : wallet.balance - amount,
-        depositBalance: updated.depositBalance !== undefined ? updated.depositBalance : Math.max(0, (wallet.depositBalance || 0) - amount),
-        bonusBalance: updated.bonusBalance !== undefined ? updated.bonusBalance : (wallet.bonusBalance || 0),
+        balance: updated.balance !== undefined ? updated.balance : (walletType === 'deposit' ? Math.max(0, wallet.balance - amount) : wallet.balance),
+        depositBalance: updated.depositBalance !== undefined ? updated.depositBalance : (walletType === 'deposit' ? Math.max(0, (wallet.depositBalance || 0) - amount) : wallet.depositBalance),
+        bonusBalance: updated.bonusBalance !== undefined ? updated.bonusBalance : (walletType === 'bonus' ? Math.max(0, (wallet.bonusBalance || 0) - amount) : wallet.bonusBalance),
       },
       allUsers: allUsers.map((u) =>
-        u.id === user.id ? { ...u, balance: updated.balance !== undefined ? updated.balance : u.balance - amount } : u
+        u.id === user.id ? { 
+          ...u, 
+          balance: updated.balance !== undefined ? updated.balance : (walletType === 'deposit' ? Math.max(0, u.balance - amount) : u.balance),
+          depositBalance: updated.depositBalance !== undefined ? updated.depositBalance : (walletType === 'deposit' ? Math.max(0, (u.depositBalance || 0) - amount) : u.depositBalance),
+          bonusBalance: updated.bonusBalance !== undefined ? updated.bonusBalance : (walletType === 'bonus' ? Math.max(0, (u.bonusBalance || 0) - amount) : u.bonusBalance),
+        } : u
       ),
       withdrawalRequests: [req, ...get().withdrawalRequests],
       transactions: [tx, ...get().transactions],
@@ -622,7 +627,11 @@ export const useStore = create<AppState>()(
     if (!req) return;
     const txHash = hash || `TX_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
 
-    const updatedReq: WithdrawalRequest = { ...req, status: 'completed' };
+    const updatedReq: WithdrawalRequest & { txHash?: string } = { 
+      ...req, 
+      status: 'completed',
+      txHash: hash || undefined, // only send if provided by admin
+    };
 
     set({
       withdrawalRequests: get().withdrawalRequests.map((r) =>
@@ -845,7 +854,7 @@ export const useStore = create<AppState>()(
 
     const tx: Transaction = {
       id: `tx_cred_${Date.now()}`,
-      type: 'deposit',
+      type: walletType === 'bonus' ? 'bonus' : 'deposit',
       amount: amount,
       network: 'BEP20',
       status: 'completed',
@@ -904,7 +913,7 @@ export const useStore = create<AppState>()(
 
     const tx: Transaction = {
       id: `tx_deb_${Date.now()}`,
-      type: 'withdrawal',
+      type: walletType === 'bonus' ? 'bonus' : 'withdrawal',
       amount: -actualDeducted,
       network: 'BEP20',
       status: 'completed',

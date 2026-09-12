@@ -103,13 +103,17 @@ export async function POST(request: Request) {
     }
 
     if (!userRecord || !userRecord.password) {
+      console.log('Login failed: userRecord not found or no password for', cleanEmail);
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
     // Support both hashed (bcrypt) and legacy plaintext passwords.
     // On successful plaintext match, migrate to hash automatically.
     let passwordValid = false;
-    if (await verifyPassword(cleanPassword, userRecord.password)) {
+    const bcryptCheck = await verifyPassword(cleanPassword, userRecord.password);
+    console.log(`Login debug for ${cleanEmail}: bcryptCheck=${bcryptCheck}`);
+    
+    if (bcryptCheck) {
       passwordValid = true;
     } else if (userRecord.password === cleanPassword) {
       // Legacy plaintext match — migrate to hash immediately.

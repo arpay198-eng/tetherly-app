@@ -79,6 +79,7 @@ export async function syncUserToFirestore(user: AdminUserItem) {
       bonusClaimed: user.bonusClaimed || false,
       referredBy: user.referredBy || '',
       depositBalance: user.depositBalance !== undefined ? user.depositBalance : undefined,
+      bonusBalance: user.bonusBalance !== undefined ? user.bonusBalance : undefined,
     });
   } catch (error) {
     console.error('Error syncing user to Firestore:', error);

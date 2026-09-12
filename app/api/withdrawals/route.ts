@@ -227,10 +227,13 @@ export async function POST(request: Request) {
       });
 
       if (status === 'completed') {
+        const msg = body.txHash 
+          ? `Your withdrawal of ${wdAmount.toFixed(2)} USDT has been approved and sent. TxID: ${body.txHash}`
+          : `Your withdrawal of ${wdAmount.toFixed(2)} USDT has been approved and sent.`;
         pushNotification(
           targetUserId,
           'Withdrawal Approved',
-          `Your withdrawal of ${wdAmount.toFixed(2)} USDT has been approved and sent.`,
+          msg,
           'success'
         );
       }
@@ -362,6 +365,7 @@ export async function POST(request: Request) {
         if (walletType === 'deposit') {
           newDepositBalance = Math.max(0, depositBalance - amount);
           newBalance = Math.max(0, balance - amount);
+          updates.lastDepositDate = new Date().toISOString();
           // Full deposit withdrawal resets pending claims cycle
           if (newDepositBalance <= 0) {
             updates.pendingClaims = 0;
@@ -375,7 +379,6 @@ export async function POST(request: Request) {
         updates.depositBalance = newDepositBalance;
         updates.bonusBalance = newBonusBalance;
         updates.lastWithdrawalDate = new Date().toISOString();
-        updates.lastDepositDate = new Date().toISOString();
 
         tx.set(wdRef, wdData);
         tx.update(userRef, updates);

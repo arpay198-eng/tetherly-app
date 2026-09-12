@@ -209,7 +209,7 @@ export async function finalizeDeposit(deposit: DepositDoc, amount: number, txHas
 
       // Same on-chain payment submitted as a second deposit → never credit twice.
       // SKIP for admin: admin manually approves, doesn't need on-chain duplicate check.
-      if (method !== 'admin' && usedSnap.exists) {
+      if (method !== 'admin' && usedSnap.exists && (usedSnap.data() as any)?.depositId !== deposit.id) {
         const first = (usedSnap.data() as any)?.depositId || null;
         await tx.update(depositRef, {
           status: 'failed',

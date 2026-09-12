@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import MobileNav from '@/components/layout/MobileNav';
+import { Gift } from 'lucide-react';
 
 export default function TransactionsPage() {
   const router = useRouter();
@@ -44,9 +45,7 @@ export default function TransactionsPage() {
         );
       case 'bonus':
         return (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
-          </svg>
+          <Gift size={18} color="#8b5cf6" strokeWidth={2.5} />
         );
       case 'referral':
         return (
@@ -140,6 +139,19 @@ export default function TransactionsPage() {
                   <p className="text-[11px] font-medium" style={{ color: '#999' }}>
                     {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </p>
+                  {tx.hash && tx.status === 'completed' && !tx.hash.startsWith('TX_') && !tx.hash.startsWith('0x_wd_') && !tx.hash.startsWith('ADMIN_DEBIT_') && !tx.hash.startsWith('ADMIN_CREDIT_') && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono truncate max-w-[180px]" title={tx.hash}>
+                        TxID: {tx.hash}
+                      </span>
+                      <button 
+                        onClick={() => navigator.clipboard.writeText(tx.hash!)}
+                        className="text-[10px] text-emerald-600 font-bold hover:underline"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  )}
                   {tx.rejectReason && tx.status === 'failed' && (
                     <p className="text-[10px] text-red-500 truncate" title={tx.rejectReason}>
                       Reason: {tx.rejectReason}
